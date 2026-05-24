@@ -26,8 +26,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Secrets tidak boleh dipakai di `if:` — cek di shell (opsional, timpa file yang di-commit)
       - name: Generate firebase-config.js from secrets
-        if: ${{ secrets.FIREBASE_API_KEY != '' }}
         env:
           FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
           FIREBASE_AUTH_DOMAIN: ${{ secrets.FIREBASE_AUTH_DOMAIN }}
@@ -36,6 +36,10 @@ jobs:
           FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.FIREBASE_MESSAGING_SENDER_ID }}
           FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
         run: |
+          if [ -z "$FIREBASE_API_KEY" ]; then
+            echo "No Firebase secrets — using js/firebase-config.js from repo."
+            exit 0
+          fi
           cat > js/firebase-config.js <<EOF
           const FIREBASE_CONFIG = {
             apiKey: "$FIREBASE_API_KEY",
