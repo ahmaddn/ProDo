@@ -62,15 +62,14 @@ Aplikasi produktivitas statis siap produksi menggunakan Vanilla JavaScript dan T
 3. Salin `js/firebase-config.example.js` menjadi `js/firebase-config.js` dan isi nilai `FIREBASE_CONFIG`.
 4. **Authentication** → Sign-in method → aktifkan **Email/Password**.
 5. **Firestore Database** → buat database (mode production atau test).
-6. **Rules** → tempel isi file `firestore.rules` di root proyek:
-
-```
-match /users/{userId}/{document=**} {
-  allow read, write: if request.auth != null && request.auth.uid == userId;
-}
-```
-
-7. Deploy rules dari Firebase Console atau CLI (`firebase deploy --only firestore:rules`).
+6. **Firestore Rules** (wajib — tanpa ini muncul error *Missing or insufficient permissions*):
+   - Buka [Firestore Rules](https://console.firebase.google.com/project/my-portofolio-43930/firestore/rules) (ganti `my-portofolio-43930` dengan `projectId` Anda).
+   - Hapus rules lama, salin **seluruh isi** file `firestore.rules` dari proyek ini.
+   - Klik **Publish**.
+7. **Authentication → Settings → Authorized domains** → tambahkan:
+   - `localhost`, `127.0.0.1` (development lokal)
+   - **`your-username.github.io`** (wajib untuk GitHub Pages)
+   - Custom domain jika dipakai
 
 ### Struktur data Firestore
 
@@ -92,7 +91,29 @@ users/{uid}/meta/settings
 
 > **Catatan Telegram**: Buat bot via [@BotFather](https://t.me/BotFather), dapatkan Chat ID, lalu isi di menu **Pengaturan** (ikon gear).
 
-> **Keamanan**: Jangan commit `js/firebase-config.js` (sudah ada di `.gitignore`). API key Firebase untuk web app boleh dipakai di client; lindungi data dengan Firestore Security Rules.
+## Deploy ke GitHub Pages
+
+Error **"Firebase belum dikonfigurasi"** di GitHub Pages hampir selalu karena `js/firebase-config.js` **tidak ikut ter-upload** (file di-ignore Git).
+
+### Cara A — Commit config (paling mudah)
+
+1. Pastikan `js/firebase-config.js` sudah berisi config proyek Firebase Anda (bukan placeholder `YOUR_`).
+2. **Jangan** ignore file ini di `.gitignore` (sudah diperbaiki di repo).
+3. Push ke GitHub:
+   ```bash
+   git add js/firebase-config.js .nojekyll index.html
+   git commit -m "Add Firebase config for GitHub Pages"
+   git push
+   ```
+4. Di repo GitHub: **Settings → Pages** → Source: **GitHub Actions** atau branch `main` / folder root.
+5. Di Firebase Console → **Authentication → Authorized domains** → tambahkan `your-username.github.io`.
+6. Buka situs: `https://your-username.github.io/nama-repo/` (pakai URL dengan nama repo).
+
+> API key Firebase untuk web app **memang dipakai di browser** (bukan rahasia). Keamanan data mengandalkan **Firestore Security Rules**, bukan menyembunyikan config.
+
+### Cara B — GitHub Secrets (opsional)
+
+Pakai workflow `.github/workflows/deploy-pages.yml` dan isi Secrets di repo: `FIREBASE_API_KEY`, `FIREBASE_AUTH_DOMAIN`, `FIREBASE_PROJECT_ID`, `FIREBASE_STORAGE_BUCKET`, `FIREBASE_MESSAGING_SENDER_ID`, `FIREBASE_APP_ID`. Aktifkan Pages dari **GitHub Actions**.
 
 ## Struktur Direktori
 

@@ -28,7 +28,18 @@ const Storage = {
         tgSettings: { botToken: '', chatId: '' }
     },
 
+    _configErrorMessage() {
+        if (window.__FIREBASE_CONFIG_MISSING__ || typeof FIREBASE_CONFIG === 'undefined') {
+            return 'File js/firebase-config.js tidak ada di server. Untuk GitHub Pages: commit & push file tersebut ke repo (lihat README → Deploy GitHub Pages).';
+        }
+        if (!FIREBASE_CONFIG.apiKey || String(FIREBASE_CONFIG.apiKey).includes('YOUR_')) {
+            return 'Isi js/firebase-config.js dengan data dari Firebase Console (Project Settings → Your apps).';
+        }
+        return 'Firebase belum dikonfigurasi.';
+    },
+
     _isConfigured() {
+        if (window.__FIREBASE_CONFIG_MISSING__) return false;
         return typeof FIREBASE_CONFIG !== 'undefined'
             && FIREBASE_CONFIG.apiKey
             && !String(FIREBASE_CONFIG.apiKey).includes('YOUR_');
@@ -44,7 +55,7 @@ const Storage = {
 
     async init() {
         if (!this._isConfigured()) {
-            console.warn('[ProDo] Firebase belum dikonfigurasi. Isi js/firebase-config.js');
+            console.warn('[ProDo]', this._configErrorMessage());
             return;
         }
 
@@ -59,9 +70,17 @@ const Storage = {
                 this._tearDownListeners();
                 if (user) {
                     this._uid = user.uid;
-                    await this._loadAll();
-                    this._subscribeRealtime();
-                    this._ready = true;
+                    try {
+                        await this._loadAll();
+                        this._subscribeRealtime();
+                        this._ready = true;
+                    } catch (err) {
+                        console.error('[ProDo] Firestore:', this._firestoreErrorMessage(err));
+                        this._ready = false;
+                        window.dispatchEvent(new CustomEvent('prodo:firestore-error', {
+                            detail: { message: this._firestoreErrorMessage(err) }
+                        }));
+                    }
                 } else {
                     this._uid = null;
                     this._ready = false;
@@ -90,11 +109,18 @@ const Storage = {
 
     _subscribeRealtime() {
         const cols = ['tasks', 'targets', 'categories', 'activities'];
+        const onSnapError = (err) => {
+            console.error('[ProDo] Firestore listener:', this._firestoreErrorMessage(err));
+        };
+
         cols.forEach((col) => {
-            const unsub = this._userCol(col).onSnapshot((snap) => {
-                this.cache[col] = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-                this._dispatchChange();
-            });
+            const unsub = this._userCol(col).onSnapshot(
+                (snap) => {
+                    this.cache[col] = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+                    this._dispatchChange();
+                },
+                onSnapError
+            );
             this._unsubs.push(unsub);
         });
 
@@ -109,7 +135,7 @@ const Storage = {
                     };
                 }
                 this._dispatchChange();
-            });
+            }, onSnapError);
         this._unsubs.push(metaUnsub);
 
         const settingsUnsub = this._db.collection('users').doc(this._uid)
@@ -123,7 +149,7 @@ const Storage = {
                     };
                 }
                 this._dispatchChange();
-            });
+            }, onSnapError);
         this._unsubs.push(settingsUnsub);
     },
 
@@ -197,6 +223,15 @@ const Storage = {
         if (!this._ready) throw new Error('Gagal memuat data pengguna');
     },
 
+    _firestoreErrorMessage(error) {
+        const projectId = typeof FIREBASE_CONFIG !== 'undefined' ? FIREBASE_CONFIG.projectId : 'proyek-anda';
+        const rulesUrl = `https://console.firebase.google.com/project/${projectId}/firestore/rules`;
+        if (error?.code === 'permission-denied') {
+            return `Akses Firestore ditolak. Buka ${rulesUrl} → salin isi file firestore.rules dari proyek ini → Publish. Pastikan Anda sudah login di aplikasi.`;
+        }
+        return error?.message || 'Gagal mengakses Firestore.';
+    },
+
     _authErrorMessage(error) {
         const projectId = typeof FIREBASE_CONFIG !== 'undefined' ? FIREBASE_CONFIG.projectId : 'proyek-anda';
         const authUrl = `https://console.firebase.google.com/project/${projectId}/authentication`;
@@ -209,7 +244,7 @@ const Storage = {
     },
 
     async registerUser(email, password) {
-        if (!this._isConfigured()) throw new Error('Firebase belum dikonfigurasi');
+        if (!this._isConfigured()) throw new Error(this._configErrorMessage());
         try {
             await this._auth.createUserWithEmailAndPassword(email, password);
             await this._waitForReady();
@@ -221,7 +256,7 @@ const Storage = {
     },
 
     async loginUser(email, password) {
-        if (!this._isConfigured()) throw new Error('Firebase belum dikonfigurasi');
+        if (!this._isConfigured()) throw new Error(this._configErrorMessage());
         try {
             await this._auth.signInWithEmailAndPassword(email, password);
             await this._waitForReady();

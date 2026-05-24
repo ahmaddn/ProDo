@@ -214,6 +214,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (Storage.isLoggedIn()) refreshCurrentPage();
     });
 
+    window.addEventListener('prodo:firestore-error', (e) => {
+        UI.showToast(e.detail?.message || 'Gagal mengakses database.', 'error');
+    });
+
     authSwitchBtn.addEventListener('click', (e) => {
         e.preventDefault();
         if (authMode === 'login') {
