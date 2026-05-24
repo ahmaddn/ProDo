@@ -199,6 +199,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             streakBadge.classList.remove('hidden');
             streakBadge.classList.add('flex');
             initPage('dashboard');
+            AppNotifications.runScheduledChecks();
         } else {
             authContainer.classList.remove('hidden');
             appContainer.classList.add('hidden');
@@ -249,6 +250,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     authUsername.value = '';
                     authPassword.value = '';
                     await checkAuthState();
+                    AppNotifications.runScheduledChecks();
                     UI.showToast('Berhasil masuk!');
                 } else {
                     console.error('[ProDo] Login gagal: email atau password salah');
@@ -260,6 +262,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     authUsername.value = '';
                     authPassword.value = '';
                     await checkAuthState();
+                    AppNotifications.runScheduledChecks();
                     UI.showToast('Akun berhasil dibuat!');
                 } else {
                     console.error('[ProDo] Registrasi gagal: email sudah digunakan');
@@ -317,7 +320,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         UI.renderTasks(tasks, categories);
         UI.updateDailyProgress(Storage.getTasks(), stats.streak);
         UI.updateNaggingBanner(Storage.getTasks());
-        AppNotifications.checkOverdueTasks(Storage.getTasks());
         initSortable();
     }
 

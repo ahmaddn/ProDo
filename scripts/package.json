@@ -1,0 +1,12 @@
+{
+  "name": "prodo-telegram-reminders",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "reminders": "node telegram-reminders.mjs"
+  },
+  "dependencies": {
+    "dayjs": "^1.11.13",
+    "firebase-admin": "^13.0.2"
+  }
+}

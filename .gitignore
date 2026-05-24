@@ -1,2 +1,4 @@
 # Opsional: file lokal saja (config Firebase HARUS ikut deploy ke GitHub Pages)
 # js/firebase-config.js
+
+scripts/node_modules/

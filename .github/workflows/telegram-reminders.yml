@@ -1,0 +1,33 @@
+# Pengingat Telegram 24/7 (gratis) — baca Firestore, kirim via Bot API
+# Setup: lihat docs/TELEGRAM-CRON-SETUP.md
+
+name: Telegram reminders
+
+on:
+  schedule:
+    # Setiap jam (UTC). ~08:00 WIB = 01:00 UTC, dll.
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+jobs:
+  reminders:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: scripts/package-lock.json
+
+      - name: Install dependencies
+        working-directory: scripts
+        run: npm ci
+
+      - name: Run Telegram reminders
+        working-directory: scripts
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          REMINDER_TIMEZONE: Asia/Jakarta
+        run: npm run reminders

@@ -25,7 +25,8 @@ const Storage = {
         categories: [],
         stats: { streak: 0, lastActiveDate: null },
         activities: [],
-        tgSettings: { botToken: '', chatId: '' }
+        tgSettings: { botToken: '', chatId: '' },
+        notificationLog: {}
     },
 
     _configErrorMessage() {
@@ -98,7 +99,8 @@ const Storage = {
             categories: [],
             stats: { streak: 0, lastActiveDate: null },
             activities: [],
-            tgSettings: { botToken: '', chatId: '' }
+            tgSettings: { botToken: '', chatId: '' },
+            notificationLog: {}
         };
     },
 
@@ -151,16 +153,24 @@ const Storage = {
                 this._dispatchChange();
             }, onSnapError);
         this._unsubs.push(settingsUnsub);
+
+        const notifUnsub = this._db.collection('users').doc(this._uid)
+            .collection('meta').doc('notificationLog')
+            .onSnapshot((doc) => {
+                this.cache.notificationLog = doc.exists ? (doc.data().sent || {}) : {};
+            }, onSnapError);
+        this._unsubs.push(notifUnsub);
     },
 
     async _loadAll() {
-        const [tasksSnap, targetsSnap, catsSnap, actsSnap, statsDoc, settingsDoc] = await Promise.all([
+        const [tasksSnap, targetsSnap, catsSnap, actsSnap, statsDoc, settingsDoc, notifDoc] = await Promise.all([
             this._userCol('tasks').get(),
             this._userCol('targets').get(),
             this._userCol('categories').get(),
             this._userCol('activities').get(),
             this._db.collection('users').doc(this._uid).collection('meta').doc('stats').get(),
-            this._db.collection('users').doc(this._uid).collection('meta').doc('settings').get()
+            this._db.collection('users').doc(this._uid).collection('meta').doc('settings').get(),
+            this._db.collection('users').doc(this._uid).collection('meta').doc('notificationLog').get()
         ]);
 
         this.cache.tasks = tasksSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
@@ -181,6 +191,8 @@ const Storage = {
         } else {
             this.cache.tgSettings = { botToken: '', chatId: '' };
         }
+
+        this.cache.notificationLog = notifDoc.exists ? (notifDoc.data().sent || {}) : {};
 
         if (this.cache.categories.length === 0) {
             await this._seedDefaults();
@@ -482,6 +494,22 @@ const Storage = {
         this.cache.tgSettings = { ...settings };
     },
 
+    getNotificationLog() {
+        return { ...(this.cache.notificationLog || {}) };
+    },
+
+    wasNotificationSentToday(key) {
+        const today = dayjs().format('YYYY-MM-DD');
+        return this.cache.notificationLog[key] === today;
+    },
+
+    async markNotificationSent(key) {
+        const today = dayjs().format('YYYY-MM-DD');
+        const sent = { ...this.getNotificationLog(), [key]: today };
+        await this._metaRef('notificationLog').set({ sent }, { merge: true });
+        this.cache.notificationLog = sent;
+    },
+
     // ─── Export / Import / Clear ─────────────────────────────────
 
     async exportData() {
@@ -540,6 +568,7 @@ const Storage = {
             snap.docs.forEach((d) => batch.delete(d.ref));
         }
         batch.set(this._metaRef('stats'), { streak: 0, lastActiveDate: null });
+        batch.set(this._metaRef('notificationLog'), { sent: {} });
         await batch.commit();
         await this._loadAll();
         await this._seedDefaults();
