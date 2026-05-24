@@ -1,8 +1,8 @@
 // js/app.js
 
 document.addEventListener('DOMContentLoaded', async () => {
-    // Init
     UI.init();
+    await Storage.init();
     await AppNotifications.init();
 
     // State
@@ -180,8 +180,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     tabCalendar.addEventListener('click',  () => switchPage('calendar'));
 
     // ─── Auth ────────────────────────────────────────────────────
-    function checkAuthState() {
+    function setAuthLoading(loading) {
+        authSubmitBtn.disabled = loading;
+        authSubmitBtn.textContent = loading ? 'Memuat...' : (authMode === 'login' ? 'Masuk' : 'Daftar');
+    }
+
+    async function checkAuthState() {
         if (Storage.isLoggedIn()) {
+            const migrated = await Storage.migrateFromLocalStorage();
+            if (migrated) UI.showToast('Data lama berhasil dipindahkan ke cloud.');
+
             authContainer.classList.add('hidden');
             appContainer.classList.remove('hidden');
             appContainer.classList.add('flex');
@@ -202,6 +210,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
+    window.addEventListener('prodo:data-changed', () => {
+        if (Storage.isLoggedIn()) refreshCurrentPage();
+    });
+
     authSwitchBtn.addEventListener('click', (e) => {
         e.preventDefault();
         if (authMode === 'login') {
@@ -219,34 +231,51 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    authForm.addEventListener('submit', (e) => {
+    authForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const user = authUsername.value.trim();
+        const email = authUsername.value.trim();
         const pass = authPassword.value.trim();
-        if (!user || !pass) return;
+        if (!email || !pass) return;
 
-        if (authMode === 'login') {
-            if (Storage.loginUser(user, pass)) {
-                authUsername.value = '';
-                authPassword.value = '';
-                checkAuthState();
+        setAuthLoading(true);
+        try {
+            if (authMode === 'login') {
+                const ok = await Storage.loginUser(email, pass);
+                if (ok) {
+                    authUsername.value = '';
+                    authPassword.value = '';
+                    await checkAuthState();
+                    UI.showToast('Berhasil masuk!');
+                } else {
+                    console.error('[ProDo] Login gagal: email atau password salah');
+                    UI.showToast('Email atau password salah.', 'error');
+                }
             } else {
-                UI.showToast('Username atau password salah!', 'error');
+                const ok = await Storage.registerUser(email, pass);
+                if (ok) {
+                    authUsername.value = '';
+                    authPassword.value = '';
+                    await checkAuthState();
+                    UI.showToast('Akun berhasil dibuat!');
+                } else {
+                    console.error('[ProDo] Registrasi gagal: email sudah digunakan');
+                    UI.showToast('Email sudah terdaftar.', 'error');
+                }
             }
-        } else {
-            if (Storage.registerUser(user, pass)) {
-                UI.showToast('Pendaftaran berhasil! Silakan masuk.');
-                authSwitchBtn.click();
-            } else {
-                UI.showToast('Username sudah digunakan!', 'error');
-            }
+        } catch (err) {
+            console.error('[ProDo] Auth error:', err);
+            UI.showToast(err.message || 'Gagal autentikasi. Periksa konfigurasi Firebase.', 'error');
+        } finally {
+            setAuthLoading(false);
         }
     });
 
     logoutBtn.addEventListener('click', () => {
         UI.showConfirm('Yakin ingin keluar?', () => {
-            Storage.logoutUser();
-            checkAuthState();
+            UI.runOp('keluar', async () => {
+                await Storage.logoutUser();
+                await checkAuthState();
+            }, 'Berhasil keluar.');
         });
     });
 
@@ -303,30 +332,40 @@ document.addEventListener('DOMContentLoaded', async () => {
         return 'todo';
     }
 
-    function handleKanbanDrop(evt) {
+    async function handleKanbanDrop(evt) {
         const taskEl = evt.item;
         if (!taskEl.classList.contains('task-item')) return;
 
         const taskId = taskEl.dataset.id;
         const tasks = Storage.getTasks();
         const task = tasks.find(t => t.id === taskId);
-        if (!task) return;
+        if (!task) {
+            console.error('[ProDo] Gagal memindahkan tugas: tugas tidak ditemukan', taskId);
+            return;
+        }
 
         const toColumn = evt.to.id;
+        let successMsg = 'Tugas dipindahkan.';
+
         if (toColumn === 'taskListDone') {
             task.completed = true;
             task.column = 'done';
-            Storage.checkAndUpdateStreak();
+            await Storage.checkAndUpdateStreak();
+            successMsg = 'Tugas dipindah ke Selesai.';
         } else if (toColumn === 'taskListImportant') {
             task.completed = false;
             task.column = 'focus';
+            successMsg = 'Tugas dipindah ke Fokus / Hari Ini.';
         } else if (toColumn === 'taskListTodo') {
             task.completed = false;
             task.column = 'todo';
+            successMsg = 'Tugas dipindah ke Belum Dimulai.';
         }
 
-        Storage.updateTask(task);
-        renderTodolist();
+        UI.runOp('memindahkan tugas', async () => {
+            await Storage.updateTask(task);
+            renderTodolist();
+        }, successMsg);
     }
 
     function initSortable() {
@@ -346,7 +385,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 },
                 onEnd(evt) {
                     if (evt.from !== evt.to) {
-                        handleKanbanDrop(evt);
+                        void handleKanbanDrop(evt);
                     }
                 },
             });
@@ -406,28 +445,28 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (editingTaskId) {
             const tasks = Storage.getTasks();
             const task = tasks.find(t => t.id === editingTaskId);
-            if (task) {
-                task.title = title;
-                task.categoryId = newTaskCategory.value || null;
-                task.priority = priority;
-                task.dueDate = dueDate;
-                task.targetId = newTaskTarget.value || null;
-                Storage.updateTask(task);
-                UI.showToast('Tugas berhasil diperbarui!');
+            if (!task) {
+                console.error('[ProDo] Gagal memperbarui tugas: tugas tidak ditemukan', editingTaskId);
+                return;
             }
+            UI.runOp('memperbarui tugas', async () => {
+                await Storage.updateTask(task.id, {
+                    title,
+                    categoryId: newTaskCategory.value || null,
+                    priority,
+                    dueDate,
+                    targetId: newTaskTarget.value || null
+                });
+            }, 'Tugas berhasil diperbarui!');
         } else {
-            Storage.addTask({
-                id: generateId(),
+            UI.runOp('menambah tugas', () => Storage.addTask({
                 title,
                 categoryId: newTaskCategory.value || null,
                 priority,
                 dueDate,
                 targetId: newTaskTarget.value || null,
-                completed: false,
-                column: getDefaultColumn({ priority, dueDate }),
-                createdAt: new Date().toISOString()
-            });
-            UI.showToast('Tugas berhasil ditambahkan!');
+                column: getDefaultColumn({ priority, dueDate })
+            }), 'Tugas berhasil ditambahkan!');
         }
 
         editingTaskId = null;
@@ -448,20 +487,27 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (toggleBtn) {
             const tasks = Storage.getTasks();
             const task  = tasks.find(t => t.id === toggleBtn.dataset.id);
-            if (task) {
-                task.completed = !task.completed;
-                task.column = task.completed ? 'done' : 'todo';
-                Storage.updateTask(task);
-                if (task.completed) Storage.checkAndUpdateStreak();
-                renderTodolist();
+            if (!task) {
+                console.error('[ProDo] Gagal mengubah status tugas: tugas tidak ditemukan', toggleBtn.dataset.id);
+                return;
             }
+            const willComplete = !task.completed;
+            UI.runOp('mengubah status tugas', async () => {
+                await Storage.updateTask(task.id, {
+                    completed: willComplete,
+                    column: willComplete ? 'done' : 'todo'
+                });
+                if (willComplete) await Storage.checkAndUpdateStreak();
+                renderTodolist();
+            }, willComplete ? 'Tugas ditandai selesai.' : 'Tugas dibuka kembali.');
         }
 
         if (deleteBtn) {
             UI.showConfirm('Yakin ingin menghapus tugas ini?', () => {
-                Storage.deleteTask(deleteBtn.dataset.id);
-                UI.showToast('Tugas dihapus.');
-                renderTodolist();
+                UI.runOp('menghapus tugas', async () => {
+                    await Storage.deleteTask(deleteBtn.dataset.id);
+                    renderTodolist();
+                }, 'Tugas dihapus.');
             });
         }
 
@@ -541,11 +587,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             const catId = deleteBtn.dataset.id;
             const cat = Storage.getCategories().find(c => c.id === catId);
             UI.showConfirm(`Yakin ingin menghapus kategori "${cat?.name || ''}"? Tugas terkait akan kehilangan kategorinya.`, () => {
-                Storage.deleteCategory(catId);
-                resetCategoryForm();
-                UI.renderCategoryManageList(Storage.getCategories());
-                UI.showToast('Kategori dihapus.');
-                refreshAfterCategoryChange();
+                UI.runOp('menghapus kategori', async () => {
+                    await Storage.deleteCategory(catId);
+                    resetCategoryForm();
+                    UI.renderCategoryManageList(Storage.getCategories());
+                    refreshAfterCategoryChange();
+                }, 'Kategori dihapus.');
             });
         }
     });
@@ -559,11 +606,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         const id = categoryIdInput.value;
 
         if (id) {
-            Storage.updateCategory({ id, name, color });
-            UI.showToast('Kategori diperbarui!');
+            UI.runOp('memperbarui kategori', () => Storage.updateCategory({ id, name, color }), 'Kategori diperbarui!');
         } else {
-            Storage.addCategory({ id: generateId(), name, color });
-            UI.showToast('Kategori ditambahkan!');
+            UI.runOp('menambah kategori', () => Storage.addCategory({ id: generateId(), name, color }), 'Kategori ditambahkan!');
         }
 
         resetCategoryForm();
@@ -592,9 +637,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (deleteBtn) {
             UI.showConfirm('Yakin ingin menghapus target ini?', () => {
-                Storage.deleteTarget(deleteBtn.dataset.id);
-                UI.showToast('Target dihapus.');
-                renderTodolist();
+                UI.runOp('menghapus target', async () => {
+                    await Storage.deleteTarget(deleteBtn.dataset.id);
+                    renderTodolist();
+                }, 'Target dihapus.');
             });
         }
 
@@ -623,11 +669,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             progress: parseInt(targetProgressInput.value, 10),
             deadline: targetDeadlineInput.value || null
         };
-        if (targetIdInput.value) Storage.updateTarget(targetData);
-        else Storage.addTarget(targetData);
+        if (targetIdInput.value) {
+            UI.runOp('memperbarui target', () => Storage.updateTarget(targetData), 'Target disimpan!');
+        } else {
+            UI.runOp('menambah target', () => Storage.addTarget(targetData), 'Target disimpan!');
+        }
 
         targetModal.classList.add('hidden');
-        UI.showToast('Target disimpan!');
         renderTodolist();
     });
 
@@ -658,11 +706,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
 
         if (id) {
-            Storage.updateActivity(activityData);
-            UI.showToast('Kegiatan diperbarui!');
+            UI.runOp('memperbarui kegiatan', () => Storage.updateActivity(activityData), 'Kegiatan diperbarui!');
         } else {
-            Storage.addActivity(activityData);
-            UI.showToast('Kegiatan ditambahkan!');
+            UI.runOp('menambah kegiatan', () => Storage.addActivity(activityData), 'Kegiatan ditambahkan!');
         }
 
         activityModal.classList.add('hidden');
@@ -673,10 +719,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         const id = activityIdInput.value;
         if (id) {
             UI.showConfirm('Yakin ingin menghapus kegiatan ini?', () => {
-                Storage.deleteActivity(id);
-                UI.showToast('Kegiatan dihapus.');
-                activityModal.classList.add('hidden');
-                refreshCurrentPage();
+                UI.runOp('menghapus kegiatan', async () => {
+                    await Storage.deleteActivity(id);
+                    activityModal.classList.add('hidden');
+                    refreshCurrentPage();
+                }, 'Kegiatan dihapus.');
             });
         }
     });
@@ -692,8 +739,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     saveTgSettingsBtn.addEventListener('click', () => {
-        Storage.saveTgSettings({ botToken: tgBotTokenInput.value.trim(), chatId: tgChatIdInput.value.trim() });
-        UI.showToast('Pengaturan Telegram berhasil disimpan!');
+        UI.runOp('menyimpan pengaturan Telegram', () =>
+            Storage.saveTelegramSettings({
+                botToken: tgBotTokenInput.value.trim(),
+                chatId: tgChatIdInput.value.trim()
+            }), 'Pengaturan Telegram berhasil disimpan!');
     });
 
     openTestTgBtn.addEventListener('click', () => {
@@ -707,7 +757,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         sendTgTestBtn.disabled = true;
         lucide.createIcons();
 
-        Storage.saveTgSettings({ botToken: tgBotTokenInput.value.trim(), chatId: tgChatIdInput.value.trim() });
+        await Storage.saveTelegramSettings({
+            botToken: tgBotTokenInput.value.trim(),
+            chatId: tgChatIdInput.value.trim()
+        });
         const result = await AppNotifications.notify(msg);
 
         sendTgTestBtn.innerHTML = originalHTML;
@@ -718,6 +771,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             UI.showToast('Pesan berhasil terkirim ke Telegram!');
             testTgModal.classList.add('hidden');
         } else {
+            console.error('[ProDo] Gagal mengirim pesan Telegram:', result);
             UI.showToast(`Gagal: ${result.message || 'Periksa Token & Chat ID!'}`, 'error');
         }
     });
@@ -730,34 +784,53 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     closeNaggingBtn.addEventListener('click', () => naggingBanner.classList.add('hidden'));
 
-    exportDataBtn.addEventListener('click', () => Storage.exportData());
+    exportDataBtn.addEventListener('click', () => {
+        UI.runOp('export data', async () => {
+            const data = await Storage.exportData();
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `prodo-backup-${dayjs().format('YYYY-MM-DD')}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }, 'Export dimulai. File sedang diunduh.');
+    });
 
     importDataInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (!file) return;
         const reader = new FileReader();
         reader.onload = (ev) => {
-            if (Storage.importData(ev.target.result)) {
-                UI.showToast('Data berhasil diimpor!');
-                refreshCurrentPage();
-                settingsModal.classList.add('hidden');
-            } else {
-                UI.showToast('Format file JSON tidak valid.', 'error');
-            }
+            UI.runOp('import data', async () => {
+                try {
+                    const data = typeof ev.target.result === 'string'
+                        ? JSON.parse(ev.target.result)
+                        : ev.target.result;
+                    await Storage.importData(data);
+                    refreshCurrentPage();
+                    settingsModal.classList.add('hidden');
+                } catch (err) {
+                    console.error('[ProDo] Import gagal:', err);
+                    UI.showToast('Format file JSON tidak valid.', 'error');
+                    throw err;
+                }
+            }, 'Data berhasil diimpor!');
         };
         reader.readAsText(file);
+        e.target.value = '';
     });
 
     clearDataBtn.addEventListener('click', () => {
         UI.showConfirm('PERINGATAN! Ini akan menghapus SEMUA data tugas dan target Anda. Lanjutkan?', () => {
-            Storage.clearAll();
-            refreshCurrentPage();
-            settingsModal.classList.add('hidden');
-            UI.showToast('Semua data berhasil dihapus.');
+            UI.runOp('menghapus semua data', async () => {
+                await Storage.clearAll();
+                refreshCurrentPage();
+                settingsModal.classList.add('hidden');
+            }, 'Semua data berhasil dihapus.');
         });
     });
 
     // ─── Boot ────────────────────────────────────────────────────
-    Storage.init();
-    checkAuthState();
+    await checkAuthState();
 });

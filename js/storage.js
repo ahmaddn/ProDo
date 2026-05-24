@@ -1,344 +1,537 @@
-// js/storage.js
-
+/**
+ * ProDo Storage — Firebase Auth + Firestore dengan cache in-memory.
+ * API sinkron (getTasks, dll.) membaca cache; operasi tulis mengembalikan Promise.
+ */
 const Storage = {
-    KEYS_BASE: {
-        TASKS: 'prodo_tasks',
-        TARGETS: 'prodo_targets',
-        CATEGORIES: 'prodo_categories',
-        STATS: 'prodo_stats',
-        TG_SETTINGS: 'prodo_tg_settings',
-        ACTIVITIES: 'prodo_activities'
-    },
-    USERS_KEY: 'prodo_users',
-    CURRENT_USER_KEY: 'prodo_current_user',
-    currentUser: null,
-
-    KEYS: {}, // dynamically generated based on currentUser
-
-    DEFAULT_CATEGORIES: [
-        { id: 'cat_work', name: 'Pekerjaan', color: 'bg-blue-100 text-blue-700 ring-blue-400' },
-        { id: 'cat_personal', name: 'Pribadi', color: 'bg-emerald-100 text-emerald-700 ring-emerald-400' },
-        { id: 'cat_health', name: 'Kesehatan', color: 'bg-pink-100 text-pink-700 ring-pink-400' }
-    ],
-
     CATEGORY_COLORS: [
-        { id: 'blue', label: 'Biru', hex: '#2563eb', color: 'bg-blue-100 text-blue-700 ring-blue-400' },
-        { id: 'emerald', label: 'Hijau', hex: '#059669', color: 'bg-emerald-100 text-emerald-700 ring-emerald-400' },
-        { id: 'pink', label: 'Pink', hex: '#db2777', color: 'bg-pink-100 text-pink-700 ring-pink-400' },
-        { id: 'amber', label: 'Kuning', hex: '#d97706', color: 'bg-amber-100 text-amber-700 ring-amber-400' },
-        { id: 'purple', label: 'Ungu', hex: '#9333ea', color: 'bg-purple-100 text-purple-700 ring-purple-400' },
-        { id: 'cyan', label: 'Cyan', hex: '#0891b2', color: 'bg-cyan-100 text-cyan-700 ring-cyan-400' },
-        { id: 'rose', label: 'Merah', hex: '#e11d48', color: 'bg-rose-100 text-rose-700 ring-rose-400' },
-        { id: 'indigo', label: 'Indigo', hex: '#4f46e5', color: 'bg-indigo-100 text-indigo-700 ring-indigo-400' }
+        { color: 'bg-blue-100 text-blue-700', label: 'Biru', hex: '#3b82f6' },
+        { color: 'bg-green-100 text-green-700', label: 'Hijau', hex: '#22c55e' },
+        { color: 'bg-purple-100 text-purple-700', label: 'Ungu', hex: '#a855f7' },
+        { color: 'bg-amber-100 text-amber-700', label: 'Kuning', hex: '#f59e0b' },
+        { color: 'bg-rose-100 text-rose-700', label: 'Merah', hex: '#f43f5e' },
+        { color: 'bg-teal-100 text-teal-700', label: 'Teal', hex: '#14b8a6' },
+        { color: 'bg-slate-100 text-slate-700', label: 'Abu', hex: '#64748b' }
     ],
 
-    DEFAULT_STATS: {
-        streak: 0,
-        lastCompletedDate: null
+    _auth: null,
+    _db: null,
+    _uid: null,
+    _ready: false,
+    _unsubs: [],
+
+    cache: {
+        tasks: [],
+        targets: [],
+        categories: [],
+        stats: { streak: 0, lastActiveDate: null },
+        activities: [],
+        tgSettings: { botToken: '', chatId: '' }
     },
 
-    init() {
-        this.currentUser = localStorage.getItem(this.CURRENT_USER_KEY);
-        if (this.currentUser) {
-            this.setKeysForUser(this.currentUser);
-            this.initUserData();
+    _isConfigured() {
+        return typeof FIREBASE_CONFIG !== 'undefined'
+            && FIREBASE_CONFIG.apiKey
+            && !String(FIREBASE_CONFIG.apiKey).includes('YOUR_');
+    },
+
+    _userCol(name) {
+        return this._db.collection('users').doc(this._uid).collection(name);
+    },
+
+    _dispatchChange() {
+        window.dispatchEvent(new CustomEvent('prodo:data-changed'));
+    },
+
+    async init() {
+        if (!this._isConfigured()) {
+            console.warn('[ProDo] Firebase belum dikonfigurasi. Isi js/firebase-config.js');
+            return;
         }
+
+        if (!firebase.apps.length) {
+            firebase.initializeApp(FIREBASE_CONFIG);
+        }
+        this._auth = firebase.auth();
+        this._db = firebase.firestore();
+
+        return new Promise((resolve) => {
+            this._auth.onAuthStateChanged(async (user) => {
+                this._tearDownListeners();
+                if (user) {
+                    this._uid = user.uid;
+                    await this._loadAll();
+                    this._subscribeRealtime();
+                    this._ready = true;
+                } else {
+                    this._uid = null;
+                    this._ready = false;
+                    this._resetCache();
+                }
+                resolve();
+            });
+        });
     },
 
-    setKeysForUser(username) {
-        this.KEYS = {
-            TASKS: `${this.KEYS_BASE.TASKS}_${username}`,
-            TARGETS: `${this.KEYS_BASE.TARGETS}_${username}`,
-            CATEGORIES: `${this.KEYS_BASE.CATEGORIES}_${username}`,
-            STATS: `${this.KEYS_BASE.STATS}_${username}`,
-            TG_SETTINGS: `${this.KEYS_BASE.TG_SETTINGS}_${username}`,
-            ACTIVITIES: `${this.KEYS_BASE.ACTIVITIES}_${username}`
+    _resetCache() {
+        this.cache = {
+            tasks: [],
+            targets: [],
+            categories: [],
+            stats: { streak: 0, lastActiveDate: null },
+            activities: [],
+            tgSettings: { botToken: '', chatId: '' }
         };
     },
 
-    initUserData() {
-        if (!localStorage.getItem(this.KEYS.CATEGORIES)) {
-            this.saveCategories(this.DEFAULT_CATEGORIES);
-        }
-        if (!localStorage.getItem(this.KEYS.STATS)) {
-            this.saveStats(this.DEFAULT_STATS);
-        }
-        if (!localStorage.getItem(this.KEYS.TASKS)) {
-            this.saveTasks([]);
-        }
-        if (!localStorage.getItem(this.KEYS.TARGETS)) {
-            this.saveTargets([]);
-        }
-        if (!localStorage.getItem(this.KEYS.ACTIVITIES)) {
-            this.saveActivities([]);
-        }
+    _tearDownListeners() {
+        this._unsubs.forEach((fn) => fn());
+        this._unsubs = [];
     },
 
-    // --- Authentication ---
-    getUsers() {
-        return JSON.parse(localStorage.getItem(this.USERS_KEY) || '{}');
-    },
-    registerUser(username, password) {
-        const users = this.getUsers();
-        if (users[username]) return false; // Username exists
-        users[username] = { password }; // simple plain text for local demo
-        localStorage.setItem(this.USERS_KEY, JSON.stringify(users));
-        return true;
-    },
-    loginUser(username, password) {
-        const users = this.getUsers();
-        if (users[username] && users[username].password === password) {
-            localStorage.setItem(this.CURRENT_USER_KEY, username);
-            this.currentUser = username;
-            this.setKeysForUser(username);
-            this.initUserData();
-            return true;
-        }
-        return false;
-    },
-    logoutUser() {
-        localStorage.removeItem(this.CURRENT_USER_KEY);
-        this.currentUser = null;
-        this.KEYS = {};
-    },
-    isLoggedIn() {
-        return !!this.currentUser;
-    },
-
-    // --- Tasks ---
-    getTasks() {
-        return JSON.parse(localStorage.getItem(this.KEYS.TASKS) || '[]');
-    },
-    saveTasks(tasks) {
-        localStorage.setItem(this.KEYS.TASKS, JSON.stringify(tasks));
-    },
-    addTask(task) {
-        const tasks = this.getTasks();
-        tasks.push(task);
-        this.saveTasks(tasks);
-        this.syncTargetProgress();
-    },
-    updateTask(updatedTask) {
-        const tasks = this.getTasks();
-        const index = tasks.findIndex(t => t.id === updatedTask.id);
-        if (index !== -1) {
-            tasks[index] = updatedTask;
-            this.saveTasks(tasks);
-            this.syncTargetProgress();
-        }
-    },
-    deleteTask(taskId) {
-        const tasks = this.getTasks();
-        const newTasks = tasks.filter(t => t.id !== taskId);
-        this.saveTasks(newTasks);
-        this.syncTargetProgress();
-    },
-
-    // --- Targets ---
-    getTargets() {
-        return JSON.parse(localStorage.getItem(this.KEYS.TARGETS) || '[]');
-    },
-    saveTargets(targets) {
-        localStorage.setItem(this.KEYS.TARGETS, JSON.stringify(targets));
-    },
-    addTarget(target) {
-        const targets = this.getTargets();
-        targets.push(target);
-        this.saveTargets(targets);
-    },
-    updateTarget(updatedTarget) {
-        const targets = this.getTargets();
-        const index = targets.findIndex(t => t.id === updatedTarget.id);
-        if (index !== -1) {
-            targets[index] = updatedTarget;
-            this.saveTargets(targets);
-        }
-    },
-    deleteTarget(targetId) {
-        const targets = this.getTargets();
-        const newTargets = targets.filter(t => t.id !== targetId);
-        this.saveTargets(newTargets);
-        
-        // Remove target reference from tasks
-        const tasks = this.getTasks();
-        let changed = false;
-        tasks.forEach(t => {
-            if (t.targetId === targetId) {
-                t.targetId = null;
-                changed = true;
-            }
+    _subscribeRealtime() {
+        const cols = ['tasks', 'targets', 'categories', 'activities'];
+        cols.forEach((col) => {
+            const unsub = this._userCol(col).onSnapshot((snap) => {
+                this.cache[col] = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+                this._dispatchChange();
+            });
+            this._unsubs.push(unsub);
         });
-        if(changed) this.saveTasks(tasks);
-    },
-    syncTargetProgress() {
-        const targets = this.getTargets();
-        const tasks = this.getTasks();
-        
-        let changed = false;
-        targets.forEach(target => {
-            const relatedTasks = tasks.filter(t => t.targetId === target.id);
-            if (relatedTasks.length > 0) {
-                const completedCount = relatedTasks.filter(t => t.completed).length;
-                const percent = Math.round((completedCount / relatedTasks.length) * 100);
-                if (target.progress !== percent) {
-                    target.progress = percent;
-                    changed = true;
+
+        const metaUnsub = this._db.collection('users').doc(this._uid)
+            .collection('meta').doc('stats')
+            .onSnapshot((doc) => {
+                if (doc.exists) {
+                    const d = doc.data();
+                    this.cache.stats = {
+                        streak: d.streak ?? 0,
+                        lastActiveDate: d.lastActiveDate ?? null
+                    };
                 }
-            }
-        });
+                this._dispatchChange();
+            });
+        this._unsubs.push(metaUnsub);
 
-        if (changed) {
-            this.saveTargets(targets);
-        }
-    },
-
-    // --- Activities ---
-    getActivities() {
-        return JSON.parse(localStorage.getItem(this.KEYS.ACTIVITIES) || '[]');
-    },
-    saveActivities(activities) {
-        localStorage.setItem(this.KEYS.ACTIVITIES, JSON.stringify(activities));
-    },
-    addActivity(activity) {
-        const activities = this.getActivities();
-        activities.push(activity);
-        this.saveActivities(activities);
-    },
-    updateActivity(updatedActivity) {
-        const activities = this.getActivities();
-        const index = activities.findIndex(a => a.id === updatedActivity.id);
-        if (index !== -1) {
-            activities[index] = updatedActivity;
-            this.saveActivities(activities);
-        }
-    },
-    deleteActivity(activityId) {
-        const activities = this.getActivities();
-        const newActivities = activities.filter(a => a.id !== activityId);
-        this.saveActivities(newActivities);
+        const settingsUnsub = this._db.collection('users').doc(this._uid)
+            .collection('meta').doc('settings')
+            .onSnapshot((doc) => {
+                if (doc.exists) {
+                    const d = doc.data();
+                    this.cache.tgSettings = {
+                        botToken: d.botToken || '',
+                        chatId: d.chatId || ''
+                    };
+                }
+                this._dispatchChange();
+            });
+        this._unsubs.push(settingsUnsub);
     },
 
-    // --- Categories ---
-    getCategories() {
-        return JSON.parse(localStorage.getItem(this.KEYS.CATEGORIES) || '[]');
-    },
-    saveCategories(categories) {
-        localStorage.setItem(this.KEYS.CATEGORIES, JSON.stringify(categories));
-    },
-    addCategory(category) {
-        const categories = this.getCategories();
-        categories.push(category);
-        this.saveCategories(categories);
-    },
-    updateCategory(updatedCategory) {
-        const categories = this.getCategories();
-        const index = categories.findIndex(c => c.id === updatedCategory.id);
-        if (index !== -1) {
-            categories[index] = updatedCategory;
-            this.saveCategories(categories);
-        }
-    },
-    deleteCategory(categoryId) {
-        const categories = this.getCategories().filter(c => c.id !== categoryId);
-        this.saveCategories(categories);
+    async _loadAll() {
+        const [tasksSnap, targetsSnap, catsSnap, actsSnap, statsDoc, settingsDoc] = await Promise.all([
+            this._userCol('tasks').get(),
+            this._userCol('targets').get(),
+            this._userCol('categories').get(),
+            this._userCol('activities').get(),
+            this._db.collection('users').doc(this._uid).collection('meta').doc('stats').get(),
+            this._db.collection('users').doc(this._uid).collection('meta').doc('settings').get()
+        ]);
 
-        const tasks = this.getTasks();
-        let changed = false;
-        tasks.forEach(t => {
-            if (t.categoryId === categoryId) {
-                t.categoryId = null;
-                changed = true;
-            }
-        });
-        if (changed) this.saveTasks(tasks);
-    },
+        this.cache.tasks = tasksSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        this.cache.targets = targetsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        this.cache.categories = catsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        this.cache.activities = actsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
-    // --- Stats & Streak ---
-    getStats() {
-        return JSON.parse(localStorage.getItem(this.KEYS.STATS) || JSON.stringify(this.DEFAULT_STATS));
-    },
-    saveStats(stats) {
-        localStorage.setItem(this.KEYS.STATS, JSON.stringify(stats));
-    },
-    checkAndUpdateStreak() {
-        const stats = this.getStats();
-        const todayStr = dayjs().format('YYYY-MM-DD');
-        
-        if (stats.lastCompletedDate) {
-            const lastDate = dayjs(stats.lastCompletedDate);
-            const today = dayjs(todayStr);
-            const diffDays = today.diff(lastDate, 'day');
-
-            if (diffDays === 1) {
-                // Consecutive day
-                stats.streak += 1;
-                stats.lastCompletedDate = todayStr;
-            } else if (diffDays > 1) {
-                // Streak broken
-                stats.streak = 1;
-                stats.lastCompletedDate = todayStr;
-            }
-            // if diffDays === 0, already completed a task today, do nothing to streak
+        if (statsDoc.exists) {
+            const d = statsDoc.data();
+            this.cache.stats = { streak: d.streak ?? 0, lastActiveDate: d.lastActiveDate ?? null };
         } else {
-            // First time completing a task
-            stats.streak = 1;
-            stats.lastCompletedDate = todayStr;
+            this.cache.stats = { streak: 0, lastActiveDate: null };
         }
-        
-        this.saveStats(stats);
-        return stats.streak;
+
+        if (settingsDoc.exists) {
+            const d = settingsDoc.data();
+            this.cache.tgSettings = { botToken: d.botToken || '', chatId: d.chatId || '' };
+        } else {
+            this.cache.tgSettings = { botToken: '', chatId: '' };
+        }
+
+        if (this.cache.categories.length === 0) {
+            await this._seedDefaults();
+        }
     },
 
-    // --- Telegram Settings ---
+    async _seedDefaults() {
+        const defaults = [
+            { name: 'Kerja', color: 'blue', icon: 'briefcase' },
+            { name: 'Pribadi', color: 'green', icon: 'user' },
+            { name: 'Belajar', color: 'purple', icon: 'book-open' }
+        ];
+        const batch = this._db.batch();
+        defaults.forEach((cat) => {
+            const ref = this._userCol('categories').doc();
+            batch.set(ref, { ...cat, createdAt: new Date().toISOString() });
+        });
+        await batch.commit();
+    },
+
+    _metaRef(name) {
+        return this._db.collection('users').doc(this._uid).collection('meta').doc(name);
+    },
+
+    isLoggedIn() {
+        return this._ready && !!this._uid;
+    },
+
+    getCurrentUser() {
+        if (!this._auth || !this._auth.currentUser) return null;
+        const u = this._auth.currentUser;
+        return { email: u.email, uid: u.uid };
+    },
+
+    async _waitForReady(timeoutMs = 15000) {
+        const start = Date.now();
+        while (!this._ready && Date.now() - start < timeoutMs) {
+            await new Promise((r) => setTimeout(r, 50));
+        }
+        if (!this._ready) throw new Error('Gagal memuat data pengguna');
+    },
+
+    _authErrorMessage(error) {
+        const projectId = typeof FIREBASE_CONFIG !== 'undefined' ? FIREBASE_CONFIG.projectId : 'proyek-anda';
+        const authUrl = `https://console.firebase.google.com/project/${projectId}/authentication`;
+        const map = {
+            'auth/configuration-not-found': `Firebase Authentication belum aktif. Buka ${authUrl} → klik "Get started" → Sign-in method → aktifkan Email/Password → Save.`,
+            'auth/operation-not-allowed': 'Metode Email/Password belum diaktifkan di Firebase Console (Authentication → Sign-in method).',
+            'auth/unauthorized-domain': 'Domain situs ini belum diizinkan. Tambahkan di Authentication → Settings → Authorized domains (mis. localhost).'
+        };
+        return map[error?.code] || error?.message || 'Gagal autentikasi.';
+    },
+
+    async registerUser(email, password) {
+        if (!this._isConfigured()) throw new Error('Firebase belum dikonfigurasi');
+        try {
+            await this._auth.createUserWithEmailAndPassword(email, password);
+            await this._waitForReady();
+            return true;
+        } catch (e) {
+            if (e.code === 'auth/email-already-in-use') return false;
+            throw new Error(this._authErrorMessage(e));
+        }
+    },
+
+    async loginUser(email, password) {
+        if (!this._isConfigured()) throw new Error('Firebase belum dikonfigurasi');
+        try {
+            await this._auth.signInWithEmailAndPassword(email, password);
+            await this._waitForReady();
+            return true;
+        } catch (e) {
+            if (e.code === 'auth/invalid-credential' || e.code === 'auth/wrong-password'
+                || e.code === 'auth/user-not-found' || e.code === 'auth/invalid-email') {
+                return false;
+            }
+            throw new Error(this._authErrorMessage(e));
+        }
+    },
+
+    async logoutUser() {
+        await this._auth.signOut();
+    },
+
+    // ─── Tasks (read sync, write async) ──────────────────────────
+
+    getTasks() {
+        return [...this.cache.tasks];
+    },
+
+    async addTask(task) {
+        const id = 't_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+        const newTask = {
+            id,
+            title: task.title,
+            categoryId: task.categoryId || null,
+            priority: task.priority || 'medium',
+            dueDate: task.dueDate || null,
+            targetId: task.targetId || null,
+            completed: false,
+            column: task.column || 'todo',
+            createdAt: new Date().toISOString()
+        };
+        await this._userCol('tasks').doc(id).set(newTask);
+        return newTask;
+    },
+
+    _parseIdAndUpdates(idOrDoc, maybeUpdates) {
+        if (typeof idOrDoc === 'object' && idOrDoc !== null && idOrDoc.id) {
+            const updates = { ...idOrDoc };
+            const id = updates.id;
+            delete updates.id;
+            return { id, updates: maybeUpdates || updates };
+        }
+        return { id: idOrDoc, updates: maybeUpdates || {} };
+    },
+
+    async updateTask(idOrTask, maybeUpdates) {
+        const { id, updates } = this._parseIdAndUpdates(idOrTask, maybeUpdates);
+        await this._userCol('tasks').doc(id).update(updates);
+        const idx = this.cache.tasks.findIndex((t) => t.id === id);
+        if (idx !== -1) Object.assign(this.cache.tasks[idx], updates);
+        if (updates.completed !== undefined || updates.targetId !== undefined) {
+            const task = this.cache.tasks.find((t) => t.id === id);
+            if (task?.targetId) await this.syncTargetProgress(task.targetId);
+        }
+    },
+
+    async deleteTask(id) {
+        await this._userCol('tasks').doc(id).delete();
+        this.cache.tasks = this.cache.tasks.filter((t) => t.id !== id);
+    },
+
+    async toggleTask(id) {
+        const task = this.cache.tasks.find((t) => t.id === id);
+        if (!task) return;
+        const completed = !task.completed;
+        const column = completed ? 'done' : (task.column === 'done' ? 'todo' : task.column);
+        await this.updateTask(id, { completed, column });
+        await this.syncTargetProgress(task.targetId);
+        await this.updateStreak();
+    },
+
+    // ─── Targets ─────────────────────────────────────────────────
+
+    getTargets() {
+        return [...this.cache.targets];
+    },
+
+    async addTarget(target) {
+        const id = target.id || ('tg_' + Date.now());
+        const newTarget = {
+            id,
+            name: target.name || target.title || '',
+            type: target.type || 'daily',
+            progress: target.progress ?? 0,
+            deadline: target.deadline || null,
+            createdAt: target.createdAt || new Date().toISOString()
+        };
+        await this._userCol('targets').doc(id).set(newTarget);
+        return newTarget;
+    },
+
+    async updateTarget(idOrTarget, maybeUpdates) {
+        const { id, updates } = this._parseIdAndUpdates(idOrTarget, maybeUpdates);
+        await this._userCol('targets').doc(id).update(updates);
+        const idx = this.cache.targets.findIndex((t) => t.id === id);
+        if (idx !== -1) Object.assign(this.cache.targets[idx], updates);
+    },
+
+    async deleteTarget(id) {
+        await this._userCol('targets').doc(id).delete();
+        this.cache.targets = this.cache.targets.filter((t) => t.id !== id);
+        const linked = this.cache.tasks.filter((t) => t.targetId === id);
+        for (const task of linked) {
+            await this.updateTask(task.id, { targetId: null });
+        }
+    },
+
+    async syncTargetProgress(targetId) {
+        if (!targetId) return;
+        const target = this.cache.targets.find((t) => t.id === targetId);
+        if (!target) return;
+        const linked = this.cache.tasks.filter((t) => t.targetId === targetId);
+        const total = linked.length;
+        const done = linked.filter((t) => t.completed).length;
+        const progress = total === 0 ? 0 : Math.round((done / total) * 100);
+        await this.updateTarget(targetId, { progress });
+    },
+
+    // ─── Categories ──────────────────────────────────────────────
+
+    getCategories() {
+        return [...this.cache.categories];
+    },
+
+    async addCategory(cat) {
+        const id = cat.id || ('c_' + Date.now());
+        const newCat = {
+            id,
+            name: cat.name,
+            color: cat.color || 'blue',
+            icon: cat.icon || 'folder',
+            createdAt: new Date().toISOString()
+        };
+        await this._userCol('categories').doc(id).set(newCat);
+        return newCat;
+    },
+
+    async updateCategory(idOrCat, maybeUpdates) {
+        const { id, updates } = this._parseIdAndUpdates(idOrCat, maybeUpdates);
+        await this._userCol('categories').doc(id).update(updates);
+        const idx = this.cache.categories.findIndex((c) => c.id === id);
+        if (idx !== -1) Object.assign(this.cache.categories[idx], updates);
+    },
+
+    async deleteCategory(id) {
+        await this._userCol('categories').doc(id).delete();
+        this.cache.categories = this.cache.categories.filter((c) => c.id !== id);
+        const affected = this.cache.tasks.filter((t) => t.categoryId === id);
+        for (const task of affected) {
+            await this.updateTask(task.id, { categoryId: null });
+        }
+    },
+
+    // ─── Activities ──────────────────────────────────────────────
+
+    getActivities() {
+        return [...this.cache.activities];
+    },
+
+    async addActivity(activity) {
+        const id = activity.id || ('a_' + Date.now());
+        const newAct = {
+            id,
+            name: activity.name || activity.title || '',
+            start: activity.start || activity.date,
+            end: activity.end || null,
+            createdAt: activity.createdAt || new Date().toISOString()
+        };
+        await this._userCol('activities').doc(id).set(newAct);
+        return newAct;
+    },
+
+    async updateActivity(idOrAct, maybeUpdates) {
+        const { id, updates } = this._parseIdAndUpdates(idOrAct, maybeUpdates);
+        await this._userCol('activities').doc(id).update(updates);
+        const idx = this.cache.activities.findIndex((a) => a.id === id);
+        if (idx !== -1) Object.assign(this.cache.activities[idx], updates);
+    },
+
+    async deleteActivity(id) {
+        await this._userCol('activities').doc(id).delete();
+        this.cache.activities = this.cache.activities.filter((a) => a.id !== id);
+    },
+
+    // ─── Stats & Telegram ────────────────────────────────────────
+
+    getStats() {
+        return { ...this.cache.stats };
+    },
+
+    async updateStreak() {
+        const today = new Date().toISOString().split('T')[0];
+        const stats = this.cache.stats;
+        if (stats.lastActiveDate === today) return;
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        const yStr = yesterday.toISOString().split('T')[0];
+        const streak = stats.lastActiveDate === yStr ? (stats.streak || 0) + 1 : 1;
+        const updated = { streak, lastActiveDate: today };
+        await this._metaRef('stats').set(updated, { merge: true });
+        this.cache.stats = updated;
+    },
+
+    getTelegramSettings() {
+        return { ...this.cache.tgSettings };
+    },
+
     getTgSettings() {
-        return JSON.parse(localStorage.getItem(this.KEYS.TG_SETTINGS) || '{"botToken":"","chatId":""}');
-    },
-    saveTgSettings(settings) {
-        localStorage.setItem(this.KEYS.TG_SETTINGS, JSON.stringify(settings));
+        return this.getTelegramSettings();
     },
 
-    // --- Export / Import ---
-    exportData() {
-        const data = {
+    checkAndUpdateStreak() {
+        return this.updateStreak();
+    },
+
+    async saveTelegramSettings(settings) {
+        await this._metaRef('settings').set(settings, { merge: true });
+        this.cache.tgSettings = { ...settings };
+    },
+
+    // ─── Export / Import / Clear ─────────────────────────────────
+
+    async exportData() {
+        return {
+            version: 2,
+            exportedAt: new Date().toISOString(),
             tasks: this.getTasks(),
             targets: this.getTargets(),
             categories: this.getCategories(),
-            stats: this.getStats(),
             activities: this.getActivities(),
-            version: '1.0',
-            exportDate: new Date().toISOString()
+            stats: this.getStats(),
+            tgSettings: this.getTelegramSettings()
         };
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `prodo_backup_${dayjs().format('YYYYMMDD_HHmmss')}.json`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
     },
-    importData(jsonData) {
-        try {
-            const data = JSON.parse(jsonData);
-            if (data.tasks) this.saveTasks(data.tasks);
-            if (data.targets) this.saveTargets(data.targets);
-            if (data.categories) this.saveCategories(data.categories);
-            if (data.stats) this.saveStats(data.stats);
-            if (data.activities) this.saveActivities(data.activities);
-            return true;
-        } catch (e) {
-            console.error("Import failed:", e);
-            return false;
+
+    async importData(data) {
+        if (!data || !data.tasks) throw new Error('Format data tidak valid');
+
+        const batch = this._db.batch();
+        const colNames = ['tasks', 'targets', 'categories', 'activities'];
+
+        for (const col of colNames) {
+            const snap = await this._userCol(col).get();
+            snap.docs.forEach((d) => batch.delete(d.ref));
         }
+
+        const sets = [
+            { col: 'tasks', items: data.tasks || [] },
+            { col: 'targets', items: data.targets || [] },
+            { col: 'categories', items: data.categories || [] },
+            { col: 'activities', items: data.activities || [] }
+        ];
+
+        sets.forEach(({ col, items }) => {
+            items.forEach((item) => {
+                const id = item.id || `${col.slice(0, 1)}_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`;
+                batch.set(this._userCol(col).doc(id), { ...item, id });
+            });
+        });
+
+        if (data.stats) {
+            batch.set(this._metaRef('stats'), data.stats, { merge: true });
+        }
+        if (data.tgSettings) {
+            batch.set(this._metaRef('settings'), data.tgSettings, { merge: true });
+        }
+
+        await batch.commit();
+        await this._loadAll();
     },
-    clearAll() {
-        localStorage.removeItem(this.KEYS.TASKS);
-        localStorage.removeItem(this.KEYS.TARGETS);
-        localStorage.removeItem(this.KEYS.CATEGORIES);
-        localStorage.removeItem(this.KEYS.STATS);
-        localStorage.removeItem(this.KEYS.TG_SETTINGS);
-        localStorage.removeItem(this.KEYS.ACTIVITIES);
-        this.init();
+
+    async clearAll() {
+        const batch = this._db.batch();
+        for (const col of ['tasks', 'targets', 'categories', 'activities']) {
+            const snap = await this._userCol(col).get();
+            snap.docs.forEach((d) => batch.delete(d.ref));
+        }
+        batch.set(this._metaRef('stats'), { streak: 0, lastActiveDate: null });
+        await batch.commit();
+        await this._loadAll();
+        await this._seedDefaults();
+    },
+
+    /** Migrasi one-time dari localStorage lama (username-based) ke Firestore */
+    async migrateFromLocalStorage() {
+        const key = 'prodo_migrated_' + this._uid;
+        if (localStorage.getItem(key)) return false;
+
+        const oldUser = localStorage.getItem('prodo_current_user');
+        if (!oldUser) return false;
+
+        const tasks = JSON.parse(localStorage.getItem(`prodo_tasks_${oldUser}`) || '[]');
+        const targets = JSON.parse(localStorage.getItem(`prodo_targets_${oldUser}`) || '[]');
+        const categories = JSON.parse(localStorage.getItem(`prodo_categories_${oldUser}`) || '[]');
+        const activities = JSON.parse(localStorage.getItem(`prodo_activities_${oldUser}`) || '[]');
+        const stats = JSON.parse(localStorage.getItem(`prodo_stats_${oldUser}`) || '{"streak":0}');
+        const tg = JSON.parse(localStorage.getItem(`prodo_tg_${oldUser}`) || '{}');
+
+        if (tasks.length === 0 && categories.length === 0) return false;
+
+        await this.importData({
+            tasks, targets, categories, activities,
+            stats, tgSettings: tg
+        });
+        localStorage.setItem(key, '1');
+        return true;
     }
 };

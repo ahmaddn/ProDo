@@ -1,92 +1,122 @@
 # ProDo - Manajemen Tugas & Kegiatan
 
-Aplikasi produktivitas statis siap produksi menggunakan Vanilla JavaScript dan Tailwind CSS. ProDo membantu Anda mengelola tugas, target, dan kegiatan dalam satu antarmuka modern — lengkap dengan dashboard analitik, papan Kanban, kalender terpadu, dan sistem autentikasi multi-pengguna lokal.
+Aplikasi produktivitas statis siap produksi menggunakan Vanilla JavaScript dan Tailwind CSS. ProDo membantu Anda mengelola tugas, target, dan kegiatan dalam satu antarmuka modern — lengkap dengan dashboard analitik, papan Kanban, kalender terpadu, dan sinkronisasi data via **Firebase** (Auth + Firestore).
 
 ## Fitur Utama
 
-### Autentikasi
-- **Login & Registrasi**: Setiap pengguna memiliki data terpisah yang disimpan di LocalStorage browser.
-- **Sesi per Pengguna**: Tugas, target, kegiatan, dan pengaturan disimpan per akun.
+### Autentikasi (Firebase)
+- **Login & Registrasi** dengan email dan password (Firebase Authentication).
+- **Data per akun** tersimpan di Cloud Firestore — sinkron antar perangkat/browser.
+- **Migrasi otomatis** dari data LocalStorage lama saat login pertama kali.
 
 ### Dashboard
 - **Statistik Ringkas**: Total tugas, tugas selesai, tugas terlewat, dan streak produktivitas.
 - **Visualisasi Chart.js**: Diagram donat status tugas, grafik batang prioritas, dan breakdown per kategori.
 - **Progress Target**: Ringkasan semua target beserta progress bar-nya.
-- **Tugas Mendatang**: Daftar 6 tugas terdekat berdasarkan jatuh tempo.
+- **Ringkasan Kegiatan**: Statistik kegiatan + daftar kegiatan mendatang.
 
 ### Manajemen Tugas (Kanban)
 - **Papan Kanban 3 Kolom**: *Belum Dimulai*, *Fokus / Hari Ini*, dan *Selesai*.
 - **CRUD Lengkap**: Tambah, edit, hapus, dan tandai selesai.
-- **Prioritas & Kategori**: Prioritas (rendah/sedang/tinggi) dan kategori warna-warni (Pekerjaan, Pribadi, Kesehatan).
+- **Prioritas & Kategori**: Prioritas (rendah/sedang/tinggi) dan kategori warna-warni (preset + color wheel).
 - **Jatuh Tempo & Target Terkait**: Setiap tugas bisa memiliki deadline dan dikaitkan ke target.
-- **Filter & Pencarian**: Filter (semua, aktif, selesai, hari ini, prioritas tinggi) dan pencarian real-time.
-- **Drag & Drop**: Atur urutan tugas antar kolom dengan Sortable.js.
-- **Progress Harian**: Progress bar dan pesan motivasi dinamis untuk tugas hari ini.
+- **Filter & Pencarian**: Filter dan pencarian real-time.
+- **Drag & Drop**: Atur tugas antar kolom dengan Sortable.js (posisi kolom tersimpan).
 
 ### Target Tracking
 - **Tipe Target**: Harian, mingguan, atau jangka panjang.
-- **Progress Otomatis**: Progress target tersinkronisasi otomatis berdasarkan tugas terkait yang diselesaikan.
+- **Progress Otomatis**: Progress target tersinkronisasi dari tugas terkait.
 - **Deadline Opsional**: Tampil di sidebar dan kalender.
 
 ### Kalender Kegiatan
 - **FullCalendar Terintegrasi**: Tampilan bulan, minggu, dan agenda.
-- **Tiga Jenis Event**: Tugas (biru), target/deadline (pink), dan kegiatan (teal).
+- **Tiga Jenis Event**: Tugas, target/deadline, dan kegiatan.
 - **Manajemen Kegiatan**: Tambah, edit, dan hapus kegiatan dengan rentang tanggal.
 
 ### Motivasi & Pengingat
-- **Streak**: Hitung hari beruntun produktif saat menyelesaikan tugas.
-- **Nagging Banner**: Banner peringatan otomatis untuk tugas yang melewati batas waktu.
-- **Notifikasi Telegram**: Pengingat tugas terlewat via bot Telegram (opsional, dengan fitur uji coba).
+- **Streak**: Hitung hari beruntun produktif.
+- **Nagging Banner**: Peringatan tugas terlewat.
+- **Notifikasi Telegram**: Opsional via bot Telegram.
 
 ### Pengaturan Data
-- **Export & Import JSON**: Cadangkan dan pulihkan semua data.
-- **Hapus Semua Data**: Reset data pengguna aktif.
+- **Export & Import JSON**: Cadangkan dan pulihkan data dari Firestore.
+- **Hapus Semua Data**: Reset data pengguna aktif di cloud.
 
 ## Teknologi
 
-| Kategori | Library |
+| Kategori | Library / Layanan |
 |---|---|
 | Styling | Tailwind CSS (CDN), Custom CSS |
 | Icons | Lucide Icons (CDN) |
-| Tanggal | Day.js + plugin relativeTime (CDN) |
+| Tanggal | Day.js (CDN) |
 | Drag & Drop | Sortable.js (CDN) |
 | Grafik | Chart.js 4 (CDN) |
 | Kalender | FullCalendar 6 (CDN) |
+| Backend | Firebase Auth + Cloud Firestore |
 | Runtime | Vanilla JavaScript (ES6+), HTML5 |
+
+## Setup Firebase
+
+1. Buat proyek di [Firebase Console](https://console.firebase.google.com/).
+2. Tambahkan **Web App** → salin konfigurasi SDK.
+3. Salin `js/firebase-config.example.js` menjadi `js/firebase-config.js` dan isi nilai `FIREBASE_CONFIG`.
+4. **Authentication** → Sign-in method → aktifkan **Email/Password**.
+5. **Firestore Database** → buat database (mode production atau test).
+6. **Rules** → tempel isi file `firestore.rules` di root proyek:
+
+```
+match /users/{userId}/{document=**} {
+  allow read, write: if request.auth != null && request.auth.uid == userId;
+}
+```
+
+7. Deploy rules dari Firebase Console atau CLI (`firebase deploy --only firestore:rules`).
+
+### Struktur data Firestore
+
+```
+users/{uid}/tasks/{taskId}
+users/{uid}/targets/{targetId}
+users/{uid}/categories/{categoryId}
+users/{uid}/activities/{activityId}
+users/{uid}/meta/stats
+users/{uid}/meta/settings
+```
 
 ## Cara Menjalankan
 
-Karena ini adalah aplikasi statis murni tanpa build step, cukup buka `index.html` di browser modern (Chrome, Firefox, Safari, Edge).
-
 1. Clone atau unduh repositori ini.
-2. Buka folder proyek.
-3. Klik ganda pada `index.html` atau drag-and-drop file tersebut ke browser Anda.
-4. Daftar akun baru, lalu masuk untuk mulai menggunakan aplikasi.
+2. Selesaikan **Setup Firebase** di atas.
+3. Buka `index.html` di browser modern (Chrome, Firefox, Safari, Edge) — idealnya via server lokal (Laragon, Live Server, dll.).
+4. Daftar dengan **email** dan password, lalu masuk.
 
-> **Catatan**: Untuk notifikasi Telegram, buat bot via [@BotFather](https://t.me/BotFather), dapatkan Chat ID, lalu isi di menu **Pengaturan** (ikon gear di navbar).
+> **Catatan Telegram**: Buat bot via [@BotFather](https://t.me/BotFather), dapatkan Chat ID, lalu isi di menu **Pengaturan** (ikon gear).
+
+> **Keamanan**: Jangan commit `js/firebase-config.js` (sudah ada di `.gitignore`). API key Firebase untuk web app boleh dipakai di client; lindungi data dengan Firestore Security Rules.
 
 ## Struktur Direktori
 
 ```
 todolist_NajmyPages/
-├── index.html          # Halaman utama & layout aplikasi
-├── assets/
-│   └── logo.png        # Logo ProDo
-├── css/
-│   └── style.css       # Custom styling, animasi, dan transisi halaman
+├── index.html
+├── firestore.rules
+├── assets/logo.png
+├── css/style.css
 └── js/
-    ├── app.js          # Inisialisasi, auth, navigasi halaman, event listeners
-    ├── storage.js      # LocalStorage, autentikasi, CRUD data, export/import
-    ├── ui.js           # Rendering DOM (tugas Kanban, kategori, target, toast)
-    ├── dashboard.js    # Dashboard statistik & grafik Chart.js
-    ├── calendar.js     # Integrasi FullCalendar & manajemen kegiatan
-    └── notifications.js # Integrasi Telegram Bot API
+    ├── firebase-config.example.js
+    ├── firebase-config.js      # (gitignored) konfigurasi Anda
+    ├── storage.js              # Firebase Auth + Firestore + cache
+    ├── app.js
+    ├── ui.js
+    ├── dashboard.js
+    ├── calendar.js
+    └── notifications.js
 ```
 
 ## Halaman Aplikasi
 
 | Halaman | Deskripsi |
 |---|---|
-| **Dashboard** | Ringkasan statistik, grafik, progress target, dan tugas mendatang |
-| **Tugas** | Papan Kanban, sidebar target, filter kategori, progress harian |
+| **Dashboard** | Ringkasan statistik, grafik, progress target, kegiatan |
+| **Tugas** | Papan Kanban, sidebar target, filter kategori |
 | **Kalender** | Jadwal visual tugas, target, dan kegiatan |

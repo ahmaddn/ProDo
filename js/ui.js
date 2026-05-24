@@ -388,13 +388,49 @@ const UI = {
         this.elements.toastContainer.appendChild(toast);
         lucide.createIcons();
 
-        // Animate out
         setTimeout(() => {
             toast.style.opacity = '0';
             toast.style.transform = 'translateY(10px)';
             toast.style.transition = 'all 0.3s ease';
             setTimeout(() => toast.remove(), 300);
         }, 3000);
+    },
+
+    /** Jalankan operasi: toast jika sukses, log error ke console jika gagal (mendukung Promise) */
+    runOp(actionLabel, operation, successMessage) {
+        try {
+            const result = operation();
+            if (result && typeof result.then === 'function') {
+                return result
+                    .then((value) => {
+                        if (successMessage) this.showToast(successMessage);
+                        return { ok: true, result: value };
+                    })
+                    .catch((error) => {
+                        console.error(`[ProDo] Gagal ${actionLabel}:`, error);
+                        this.showToast(`Gagal ${actionLabel}.`, 'error');
+                        return { ok: false, error };
+                    });
+            }
+            if (successMessage) this.showToast(successMessage);
+            return { ok: true, result };
+        } catch (error) {
+            console.error(`[ProDo] Gagal ${actionLabel}:`, error);
+            this.showToast(`Gagal ${actionLabel}.`, 'error');
+            return { ok: false, error };
+        }
+    },
+
+    async runOpAsync(actionLabel, operation, successMessage) {
+        try {
+            const result = await operation();
+            if (successMessage) this.showToast(successMessage);
+            return { ok: true, result };
+        } catch (error) {
+            console.error(`[ProDo] Gagal ${actionLabel}:`, error);
+            this.showToast(`Gagal ${actionLabel}.`, 'error');
+            return { ok: false, error };
+        }
     },
 
     showConfirm(message, onConfirm) {
