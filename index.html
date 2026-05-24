@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ProDo - Manajemen Tugas & Kegiatan</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#6366f1',
+                        secondary: '#ec4899',
+                        success: '#10b981',
+                        warning: '#f59e0b',
+                        danger: '#ef4444',
+                        background: '#f8fafc',
+                        surface: '#ffffff',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Sortable.js -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    <!-- Day.js -->
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1/plugin/relativeTime.js"></script>
+    <script>dayjs.extend(window.dayjs_plugin_relativeTime)</script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <!-- FullCalendar -->
+    <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js'></script>
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="css/style.css">
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="assets/logo.png">
+</head>
+<body class="bg-background text-slate-800 font-sans antialiased min-h-screen flex flex-col selection:bg-primary selection:text-white">
+
+    <!-- Nagging Banner -->
+    <div id="naggingBanner" class="hidden bg-danger text-white py-3 px-4 shadow-lg sticky top-0 z-40">
+        <div class="container mx-auto flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <i data-lucide="alert-triangle" class="w-5 h-5 flex-shrink-0"></i>
+                <span class="font-medium text-sm" id="naggingText">Ada tugas yang terlewat! Segera selesaikan.</span>
+            </div>
+            <button id="closeNaggingBtn" class="p-1 hover:bg-red-600 rounded-full transition-colors flex-shrink-0">
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Navigation -->
+    <nav class="bg-surface shadow-sm border-b border-slate-200 sticky top-0 z-30">
+        <div class="container mx-auto px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <img src="assets/logo.png" alt="ProDo Logo" class="w-9 h-9 rounded-xl shadow-sm border border-slate-100">
+                <h1 class="text-xl font-bold text-slate-800 tracking-tight">ProDo</h1>
+            </div>
+
+            <!-- Page Tabs (only visible when logged in) -->
+            <div id="pageTabs" class="hidden flex items-center bg-slate-100 rounded-xl p-1 gap-1">
+                <button id="tabDashboard" class="tab-btn active-tab px-4 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 transition-all" data-page="dashboard">
+                    <i data-lucide="bar-chart-2" class="w-4 h-4"></i>
+                    <span class="hidden sm:inline">Dashboard</span>
+                </button>
+                <button id="tabTodolist" class="tab-btn px-4 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 transition-all" data-page="todolist">
+                    <i data-lucide="list-checks" class="w-4 h-4"></i>
+                    <span class="hidden sm:inline">Tugas</span>
+                </button>
+                <button id="tabCalendar" class="tab-btn px-4 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 transition-all" data-page="calendar">
+                    <i data-lucide="calendar-days" class="w-4 h-4"></i>
+                    <span class="hidden sm:inline">Kalender</span>
+                </button>
+            </div>
+
+            <div class="flex items-center gap-2">
+                <div id="streakBadge" class="hidden items-center gap-1.5 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-full text-sm font-medium text-amber-700">
+                    <i data-lucide="flame" class="w-4 h-4 text-warning"></i>
+                    <span id="streakCount">0</span>
+                </div>
+                <button id="exportImportBtn" class="p-2 text-slate-500 hover:text-primary hover:bg-slate-100 rounded-lg transition-colors" title="Pengaturan">
+                    <i data-lucide="settings" class="w-5 h-5"></i>
+                </button>
+                <button id="logoutBtn" class="p-2 text-slate-500 hover:text-danger hover:bg-red-50 rounded-lg transition-colors hidden" title="Keluar">
+                    <i data-lucide="log-out" class="w-5 h-5"></i>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Auth Container -->
+    <div id="authContainer" class="flex-1 flex items-center justify-center p-4">
+        <div class="bg-surface w-full max-w-sm rounded-2xl shadow-xl border border-slate-200 p-8 animate-scale-in">
+            <div class="text-center mb-8">
+                <img src="assets/logo.png" alt="ProDo Logo" class="w-16 h-16 mx-auto rounded-2xl shadow-sm mb-4 border border-slate-100">
+                <h2 class="text-2xl font-bold text-slate-800">Selamat Datang</h2>
+                <p class="text-sm text-slate-500 mt-1" id="authSubtitle">Masuk untuk mengelola tugas Anda.</p>
+            </div>
+            <form id="authForm" class="flex flex-col gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Username</label>
+                    <input type="text" id="authUsername" class="w-full py-2.5 px-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" required placeholder="Masukkan username">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Password</label>
+                    <input type="password" id="authPassword" class="w-full py-2.5 px-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" required placeholder="Masukkan password">
+                </div>
+                <button type="submit" id="authSubmitBtn" class="w-full py-3 px-4 bg-primary text-white rounded-xl font-medium hover:bg-indigo-600 transition-colors shadow-md shadow-primary/30 mt-2">
+                    Masuk
+                </button>
+            </form>
+            <div class="mt-6 text-center text-sm">
+                <span class="text-slate-500" id="authSwitchText">Belum punya akun?</span>
+                <button id="authSwitchBtn" class="text-primary font-medium hover:underline ml-1">Daftar sekarang</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- App Content -->
+    <div id="appContainer" class="hidden flex-1 flex flex-col">
+
+        <!-- ===================== DASHBOARD PAGE ===================== -->
+        <div id="pageDashboard" class="page-section container mx-auto px-4 py-6 flex-1">
+
+            <!-- Welcome Banner -->
+            <div class="mb-6">
+                <h2 class="text-2xl font-bold text-slate-800">Dashboard</h2>
+                <p class="text-slate-500 text-sm" id="dashboardDate">Memuat...</p>
+            </div>
+
+            <!-- Stat Cards -->
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                <div class="bg-surface rounded-2xl p-5 border border-slate-200 shadow-sm">
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Tugas</span>
+                        <div class="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center">
+                            <i data-lucide="list-checks" class="w-4 h-4 text-primary"></i>
+                        </div>
+                    </div>
+                    <p class="text-3xl font-bold text-slate-800" id="statTotalTasks">0</p>
+                    <p class="text-xs text-slate-400 mt-1">Semua tugas</p>
+                </div>
+                <div class="bg-surface rounded-2xl p-5 border border-slate-200 shadow-sm">
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Selesai</span>
+                        <div class="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center">
+                            <i data-lucide="check-circle-2" class="w-4 h-4 text-success"></i>
+                        </div>
+                    </div>
+                    <p class="text-3xl font-bold text-slate-800" id="statCompleted">0</p>
+                    <p class="text-xs text-slate-400 mt-1">Tugas selesai</p>
+                </div>
+                <div class="bg-surface rounded-2xl p-5 border border-slate-200 shadow-sm">
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Terlewat</span>
+                        <div class="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center">
+                            <i data-lucide="clock-alert" class="w-4 h-4 text-danger"></i>
+                        </div>
+                    </div>
+                    <p class="text-3xl font-bold text-slate-800" id="statOverdue">0</p>
+                    <p class="text-xs text-slate-400 mt-1">Melebihi tenggat</p>
+                </div>
+                <div class="bg-surface rounded-2xl p-5 border border-slate-200 shadow-sm">
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Streak</span>
+                        <div class="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center">
+                            <i data-lucide="flame" class="w-4 h-4 text-warning"></i>
+                        </div>
+                    </div>
+                    <p class="text-3xl font-bold text-slate-800" id="statStreak">0</p>
+                    <p class="text-xs text-slate-400 mt-1">Hari beruntun</p>
+                </div>
+            </div>
+
+            <!-- Activity Stat Cards -->
+            <div class="mb-2">
+                <h3 class="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                    <i data-lucide="calendar-heart" class="w-4 h-4 text-teal-500"></i> Ringkasan Kegiatan
+                </h3>
+            </div>
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                <div class="bg-surface rounded-2xl p-5 border border-slate-200 shadow-sm">
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Kegiatan</span>
+                        <div class="w-8 h-8 bg-teal-100 rounded-lg flex items-center justify-center">
+                            <i data-lucide="calendar-days" class="w-4 h-4 text-teal-600"></i>
+                        </div>
+                    </div>
+                    <p class="text-3xl font-bold text-slate-800" id="statTotalActivities">0</p>
+                    <p class="text-xs text-slate-400 mt-1">Semua kegiatan</p>
+                </div>
+                <div class="bg-surface rounded-2xl p-5 border border-slate-200 shadow-sm">
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Berlangsung</span>
+                        <div class="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center">
+                            <i data-lucide="play-circle" class="w-4 h-4 text-success"></i>
+                        </div>
+                    </div>
+                    <p class="text-3xl font-bold text-slate-800" id="statOngoingActivities">0</p>
+                    <p class="text-xs text-slate-400 mt-1">Sedang berjalan</p>
+                </div>
+                <div class="bg-surface rounded-2xl p-5 border border-slate-200 shadow-sm">
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Mendatang</span>
+                        <div class="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center">
+                            <i data-lucide="calendar-clock" class="w-4 h-4 text-primary"></i>
+                        </div>
+                    </div>
+                    <p class="text-3xl font-bold text-slate-800" id="statUpcomingActivities">0</p>
+                    <p class="text-xs text-slate-400 mt-1">Akan datang</p>
+                </div>
+                <div class="bg-surface rounded-2xl p-5 border border-slate-200 shadow-sm">
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Selesai</span>
+                        <div class="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center">
+                            <i data-lucide="calendar-check" class="w-4 h-4 text-slate-500"></i>
+                        </div>
+                    </div>
+                    <p class="text-3xl font-bold text-slate-800" id="statPastActivities">0</p>
+                    <p class="text-xs text-slate-400 mt-1">Sudah lewat</p>
+                </div>
+            </div>
+
+            <!-- Charts Row -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+
+                <!-- Completion Donut -->
+                <div class="bg-surface rounded-2xl p-5 border border-slate-200 shadow-sm flex flex-col">
+                    <h3 class="text-sm font-semibold text-slate-700 mb-4">Status Tugas</h3>
+                    <div class="flex-1 flex items-center justify-center">
+                        <div class="relative w-40 h-40">
+                            <canvas id="chartDonut"></canvas>
+                            <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                                <span class="text-2xl font-bold text-slate-800" id="donutPercent">0%</span>
+                                <span class="text-xs text-slate-400">Selesai</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-center gap-4 mt-4 text-xs">
+                        <div class="flex items-center gap-1.5"><div class="w-2.5 h-2.5 rounded-full bg-success"></div><span class="text-slate-600">Selesai</span></div>
+                        <div class="flex items-center gap-1.5"><div class="w-2.5 h-2.5 rounded-full bg-primary"></div><span class="text-slate-600">Aktif</span></div>
+                        <div class="flex items-center gap-1.5"><div class="w-2.5 h-2.5 rounded-full bg-danger"></div><span class="text-slate-600">Terlewat</span></div>
+                    </div>
+                </div>
+
+                <!-- Priority Bar Chart -->
+                <div class="bg-surface rounded-2xl p-5 border border-slate-200 shadow-sm flex flex-col">
+                    <h3 class="text-sm font-semibold text-slate-700 mb-4">Tugas per Prioritas</h3>
+                    <div class="flex-1 relative">
+                        <canvas id="chartPriority"></canvas>
+                    </div>
+                </div>
+
+                <!-- Category Breakdown -->
+                <div class="bg-surface rounded-2xl p-5 border border-slate-200 shadow-sm flex flex-col">
+                    <h3 class="text-sm font-semibold text-slate-700 mb-4">Tugas per Kategori</h3>
+                    <div class="flex-1 relative">
+                        <canvas id="chartCategory"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Target Progress + Recent Tasks + Activities -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+                <!-- Target Progress Cards -->
+                <div class="bg-surface rounded-2xl p-5 border border-slate-200 shadow-sm">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                            <i data-lucide="target" class="w-4 h-4 text-secondary"></i> Progress Target
+                        </h3>
+                    </div>
+                    <div id="dashTargetList" class="flex flex-col gap-3">
+                        <div class="text-center text-sm text-slate-400 py-6">Belum ada target yang dibuat.</div>
+                    </div>
+                </div>
+
+                <!-- Top Upcoming Tasks -->
+                <div class="bg-surface rounded-2xl p-5 border border-slate-200 shadow-sm">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                            <i data-lucide="calendar-clock" class="w-4 h-4 text-primary"></i> Tugas Mendatang
+                        </h3>
+                    </div>
+                    <div id="dashUpcomingList" class="flex flex-col gap-2">
+                        <div class="text-center text-sm text-slate-400 py-6">Tidak ada tugas mendatang.</div>
+                    </div>
+                </div>
+
+                <!-- Upcoming Activities -->
+                <div class="bg-surface rounded-2xl p-5 border border-slate-200 shadow-sm">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                            <i data-lucide="calendar-heart" class="w-4 h-4 text-teal-500"></i> Kegiatan Mendatang
+                        </h3>
+                    </div>
+                    <div id="dashUpcomingActivities" class="flex flex-col gap-2">
+                        <div class="text-center text-sm text-slate-400 py-6">Tidak ada kegiatan mendatang.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===================== TODOLIST PAGE ===================== -->
+        <div id="pageTodolist" class="page-section hidden container mx-auto px-4 py-6 flex-1 flex flex-col md:flex-row gap-6">
+
+            <!-- Sidebar -->
+            <aside class="w-full md:w-72 flex-shrink-0 flex flex-col gap-4">
+                <!-- Daily Progress -->
+                <div class="bg-surface rounded-2xl p-5 shadow-sm border border-slate-200">
+                    <h2 class="text-sm font-semibold mb-3 flex items-center gap-2 text-slate-700">
+                        <i data-lucide="activity" class="w-4 h-4 text-primary"></i> Progress Hari Ini
+                    </h2>
+                    <div class="mb-2 flex justify-between items-end">
+                        <span class="text-2xl font-bold text-slate-800" id="todayProgressText">0/0</span>
+                        <span class="text-xs text-slate-500" id="todayProgressPercent">0% Selesai</span>
+                    </div>
+                    <div class="w-full bg-slate-100 rounded-full h-2 mb-3 overflow-hidden">
+                        <div id="todayProgressBar" class="bg-gradient-to-r from-success to-emerald-400 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+                    </div>
+                    <p id="motivationText" class="text-xs text-slate-500 italic">"Ayo mulai tugas pertamamu hari ini!"</p>
+                </div>
+
+                <!-- Targets -->
+                <div class="bg-surface rounded-2xl p-5 shadow-sm border border-slate-200">
+                    <div class="flex justify-between items-center mb-3">
+                        <h2 class="text-sm font-semibold flex items-center gap-2 text-slate-700">
+                            <i data-lucide="target" class="w-4 h-4 text-secondary"></i> Target
+                        </h2>
+                        <button id="addTargetBtn" class="p-1.5 text-slate-400 hover:text-secondary hover:bg-pink-50 rounded-lg transition-colors">
+                            <i data-lucide="plus" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                    <div id="targetList" class="flex flex-col gap-3">
+                        <div class="text-center text-xs text-slate-400 py-3">Belum ada target.</div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Main Task Area -->
+            <section class="flex-1 flex flex-col min-w-0">
+                <!-- Header -->
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
+                    <div>
+                        <h2 class="text-xl font-bold text-slate-800">Tugas Anda</h2>
+                        <p class="text-slate-500 text-sm" id="currentDateText">Memuat...</p>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <div class="relative">
+                            <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                            <input type="text" id="searchInput" placeholder="Cari tugas..." class="pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 w-full sm:w-44">
+                        </div>
+                        <select id="filterSelect" class="py-2 pl-3 pr-7 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 appearance-none cursor-pointer">
+                            <option value="all">Semua</option>
+                            <option value="active">Aktif</option>
+                            <option value="completed">Selesai</option>
+                            <option value="today">Hari Ini</option>
+                            <option value="high-priority">Prioritas Tinggi</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Categories -->
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Kategori</span>
+                    <button id="openCategoryModalBtn" class="p-1.5 text-slate-400 hover:text-primary hover:bg-indigo-50 rounded-lg transition-colors" title="Kelola Kategori">
+                        <i data-lucide="tags" class="w-4 h-4"></i>
+                    </button>
+                </div>
+                <div class="category-pill-wrapper mb-4">
+                    <div class="flex items-center gap-2 overflow-x-auto scrollbar-hide py-1" id="categoryList">
+                        <!-- rendered by ui.js -->
+                    </div>
+                </div>
+
+                <!-- Add Task Button -->
+                <button id="openAddTaskBtn" class="w-full flex items-center justify-center gap-2 py-3 px-4 border-2 border-dashed border-primary/40 rounded-2xl text-primary font-medium hover:bg-primary/5 hover:border-primary transition-all mb-4 group">
+                    <div class="w-7 h-7 bg-primary text-white rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform shadow-md shadow-primary/30">
+                        <i data-lucide="plus" class="w-4 h-4"></i>
+                    </div>
+                    <span>Tambah Tugas Baru</span>
+                </button>
+
+                <!-- Kanban Board -->
+                <div class="overflow-x-auto pb-4">
+                    <div class="kanban-board flex flex-col lg:flex-row gap-4 items-start">
+                        
+                        <!-- Column: To Do -->
+                        <div class="kanban-column flex-1 bg-slate-50/50 rounded-2xl border border-slate-200/60 p-3 flex flex-col min-w-[280px]">
+                            <div class="flex items-center justify-between mb-3 px-1 flex-shrink-0">
+                                <h3 class="font-semibold text-sm text-slate-700 flex items-center gap-2">
+                                    <div class="w-2 h-2 rounded-full bg-primary"></div>
+                                    Belum Dimulai
+                                </h3>
+                                <span class="text-xs font-medium bg-slate-200 text-slate-600 py-0.5 px-2 rounded-full" id="countTodo">0</span>
+                            </div>
+                            <div id="taskListTodo" class="task-column space-y-2 pb-2"></div>
+                        </div>
+
+                        <!-- Column: Penting / Hari Ini -->
+                        <div class="kanban-column flex-1 bg-amber-50/30 rounded-2xl border border-amber-200/50 p-3 flex flex-col min-w-[280px]">
+                            <div class="flex items-center justify-between mb-3 px-1 flex-shrink-0">
+                                <h3 class="font-semibold text-sm text-slate-700 flex items-center gap-2">
+                                    <div class="w-2 h-2 rounded-full bg-warning"></div>
+                                    Fokus / Hari Ini
+                                </h3>
+                                <span class="text-xs font-medium bg-amber-200 text-amber-700 py-0.5 px-2 rounded-full" id="countImportant">0</span>
+                            </div>
+                            <div id="taskListImportant" class="task-column space-y-2 pb-2"></div>
+                        </div>
+
+                        <!-- Column: Selesai -->
+                        <div class="kanban-column flex-1 bg-emerald-50/30 rounded-2xl border border-emerald-200/50 p-3 flex flex-col min-w-[280px]">
+                            <div class="flex items-center justify-between mb-3 px-1 flex-shrink-0">
+                                <h3 class="font-semibold text-sm text-slate-700 flex items-center gap-2">
+                                    <div class="w-2 h-2 rounded-full bg-success"></div>
+                                    Selesai
+                                </h3>
+                                <span class="text-xs font-medium bg-emerald-200 text-emerald-700 py-0.5 px-2 rounded-full" id="countDone">0</span>
+                            </div>
+                            <div id="taskListDone" class="task-column space-y-2 pb-2"></div>
+                        </div>
+
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- ===================== CALENDAR PAGE ===================== -->
+        <div id="pageCalendar" class="page-section container mx-auto px-4 py-6 flex-1 hidden flex-col">
+            <div class="mb-6 flex justify-between items-center flex-wrap gap-4">
+                <div>
+                    <h2 class="text-2xl font-bold text-slate-800">Manajemen Kegiatan</h2>
+                    <p class="text-slate-500 text-sm">Jadwal Tugas, Target, dan Kegiatan Anda.</p>
+                </div>
+                <button id="openAddActivityBtn" class="flex items-center gap-2 py-2 px-4 bg-primary text-white rounded-xl font-medium hover:bg-indigo-600 transition-colors shadow-sm">
+                    <i data-lucide="plus" class="w-4 h-4"></i> Tambah Kegiatan
+                </button>
+            </div>
+            <div class="flex-1 bg-surface rounded-2xl shadow-sm border border-slate-200 p-4 min-h-[500px]">
+                <div id="calendar" class="h-full"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== MODALS ===== -->
+
+    <!-- Add Task Modal -->
+    <div id="addTaskModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-surface w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden animate-scale-in">
+            <div class="p-5 border-b border-slate-100 flex justify-between items-center bg-gradient-to-r from-primary/5 to-secondary/5">
+                <h3 class="font-bold text-lg flex items-center gap-2">
+                    <div class="w-8 h-8 bg-primary rounded-lg flex items-center justify-center shadow-sm">
+                        <i data-lucide="plus" class="w-4 h-4 text-white"></i>
+                    </div>
+                    <span id="taskModalTitle">Tugas Baru</span>
+                </h3>
+                <button class="close-modal-btn p-1 text-slate-400 hover:bg-slate-100 rounded-full transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div class="p-6">
+                <form id="taskForm">
+                    <!-- Title Input -->
+                    <div class="mb-4">
+                        <label class="block text-sm font-semibold text-slate-700 mb-1.5">Nama Tugas <span class="text-danger">*</span></label>
+                        <input type="text" id="taskInput" placeholder="Apa yang perlu dilakukan?" class="w-full py-3 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all text-slate-800 font-medium" required autocomplete="off">
+                    </div>
+
+                    <!-- Detail Grid -->
+                    <div class="grid grid-cols-2 gap-3 mb-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wide">Kategori</label>
+                            <select id="newTaskCategory" class="w-full py-2.5 px-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 appearance-none cursor-pointer"></select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wide">Prioritas</label>
+                            <select id="newTaskPriority" class="w-full py-2.5 px-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 appearance-none cursor-pointer">
+                                <option value="low">Rendah</option>
+                                <option value="medium" selected>Sedang</option>
+                                <option value="high">Tinggi</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wide">Jatuh Tempo</label>
+                            <input type="date" id="newTaskDueDate" class="w-full py-2.5 px-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 cursor-pointer">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wide">Target Terkait</label>
+                            <select id="newTaskTarget" class="w-full py-2.5 px-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 appearance-none cursor-pointer">
+                                <option value="">Tidak ada target</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="w-full py-3 px-4 bg-primary text-white rounded-xl font-semibold hover:bg-indigo-600 transition-all shadow-lg shadow-primary/30 flex items-center justify-center gap-2 mt-2">
+                        <i data-lucide="check-circle" class="w-5 h-5"></i> Simpan Tugas
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-surface w-full max-w-md rounded-2xl shadow-xl overflow-hidden animate-scale-in">
+            <div class="p-5 border-b border-slate-100 flex justify-between items-center">
+                <h3 class="font-semibold text-lg">Pengaturan Data</h3>
+                <button class="close-modal-btn p-1 text-slate-400 hover:bg-slate-100 rounded-full transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div class="p-6 max-h-[80vh] overflow-y-auto">
+                <p class="text-sm text-slate-600 mb-6">Data aplikasi disimpan secara lokal di browser Anda.</p>
+                <div class="mb-6 pb-6 border-b border-slate-100">
+                    <h4 class="font-medium text-sm text-slate-800 mb-3 flex items-center gap-2"><i data-lucide="send" class="w-4 h-4 text-primary"></i> Notifikasi Telegram (Opsional)</h4>
+                    <p class="text-xs text-slate-500 mb-3">Dapatkan notifikasi tugas yang terlewat melalui bot Telegram.</p>
+                    <div class="mb-3">
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Bot Token</label>
+                        <input type="text" id="tgBotToken" class="w-full py-2 px-3 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" placeholder="123456789:ABCdefGHI...">
+                    </div>
+                    <div class="mb-3">
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Chat ID</label>
+                        <input type="text" id="tgChatId" class="w-full py-2 px-3 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" placeholder="123456789">
+                    </div>
+                    <div class="flex gap-2">
+                        <button id="saveTgSettingsBtn" class="flex-1 py-2 px-4 bg-slate-800 text-white rounded-lg text-sm font-medium hover:bg-slate-700 transition-colors">Simpan Pengaturan</button>
+                        <button id="openTestTgBtn" class="py-2 px-3 bg-slate-100 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-200 transition-colors border border-slate-200" title="Uji Notifikasi">
+                            <i data-lucide="bell-ring" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="flex flex-col gap-3">
+                    <button id="exportDataBtn" class="flex items-center justify-center gap-2 w-full py-2.5 px-4 bg-primary text-white rounded-xl font-medium hover:bg-indigo-600 transition-colors">
+                        <i data-lucide="download" class="w-4 h-4"></i> Export Data (JSON)
+                    </button>
+                    <div class="relative">
+                        <input type="file" id="importDataInput" accept=".json" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                        <button class="flex items-center justify-center gap-2 w-full py-2.5 px-4 bg-slate-100 text-slate-700 rounded-xl font-medium hover:bg-slate-200 transition-colors">
+                            <i data-lucide="upload" class="w-4 h-4"></i> Import Data (JSON)
+                        </button>
+                    </div>
+                    <button id="clearDataBtn" class="flex items-center justify-center gap-2 w-full py-2.5 px-4 bg-red-50 text-danger border border-red-100 rounded-xl font-medium hover:bg-red-100 transition-colors mt-2">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i> Hapus Semua Data
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Target Modal -->
+    <div id="targetModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-surface w-full max-w-md rounded-2xl shadow-xl overflow-hidden animate-scale-in">
+            <div class="p-5 border-b border-slate-100 flex justify-between items-center">
+                <h3 class="font-semibold text-lg" id="targetModalTitle">Tambah Target</h3>
+                <button class="close-modal-btn p-1 text-slate-400 hover:bg-slate-100 rounded-full transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div class="p-6">
+                <form id="targetModalForm">
+                    <input type="hidden" id="targetId">
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Nama Target</label>
+                        <input type="text" id="targetName" class="w-full py-2 px-3 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-secondary/50" required placeholder="Contoh: Baca 1 Buku">
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Tipe Target</label>
+                        <select id="targetType" class="w-full py-2 px-3 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-secondary/50">
+                            <option value="daily">Harian</option>
+                            <option value="weekly">Mingguan</option>
+                            <option value="longterm">Jangka Panjang</option>
+                        </select>
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Jatuh Tempo / Deadline (Opsional)</label>
+                        <input type="date" id="targetDeadline" class="w-full py-2 px-3 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-secondary/50 cursor-pointer">
+                    </div>
+                    <div class="mb-6">
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Progress Saat Ini (%)</label>
+                        <input type="number" id="targetProgress" min="0" max="100" value="0" class="w-full py-2 px-3 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-secondary/50">
+                    </div>
+                    <button type="submit" class="w-full py-2.5 px-4 bg-secondary text-white rounded-xl font-medium hover:bg-pink-600 transition-colors">
+                        Simpan Target
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Category Modal -->
+    <div id="categoryModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-surface w-full max-w-md rounded-2xl shadow-xl overflow-hidden animate-scale-in max-h-[90vh] flex flex-col">
+            <div class="p-5 border-b border-slate-100 flex justify-between items-center flex-shrink-0">
+                <h3 class="font-semibold text-lg flex items-center gap-2">
+                    <i data-lucide="tags" class="w-5 h-5 text-primary"></i>
+                    <span id="categoryModalTitle">Kelola Kategori</span>
+                </h3>
+                <button class="close-modal-btn p-1 text-slate-400 hover:bg-slate-100 rounded-full transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div class="p-6 overflow-y-auto">
+                <form id="categoryModalForm">
+                    <input type="hidden" id="categoryId">
+                    <input type="hidden" id="categoryColor" value="">
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Nama Kategori <span class="text-danger">*</span></label>
+                        <input type="text" id="categoryName" class="w-full py-2 px-3 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" required placeholder="Contoh: Belajar">
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Warna</label>
+                        <p class="text-xs text-slate-500 mb-2">Pilih preset atau warna manual</p>
+                        <div id="categoryColorPicker" class="flex flex-wrap gap-2 mb-3"></div>
+                        <div class="flex items-center gap-3 p-3 rounded-xl border border-slate-200 bg-slate-50">
+                            <input type="color" id="categoryColorWheel" class="category-color-wheel w-12 h-12 rounded-xl cursor-pointer border-2 border-white shadow-sm" value="#6366f1" title="Pilih warna manual">
+                            <div class="flex-1 min-w-0">
+                                <span class="text-sm font-medium text-slate-700 block">Warna manual</span>
+                                <span id="categoryColorHex" class="text-xs text-slate-500 font-mono">#6366F1</span>
+                            </div>
+                            <span id="categoryColorPreview" class="text-sm font-medium px-3 py-1 rounded-full shrink-0">Preview</span>
+                        </div>
+                    </div>
+                    <button type="submit" class="w-full py-2.5 px-4 bg-primary text-white rounded-xl font-medium hover:bg-indigo-600 transition-colors mb-6">
+                        Simpan Kategori
+                    </button>
+                </form>
+                <div class="border-t border-slate-100 pt-4">
+                    <h4 class="text-sm font-semibold text-slate-700 mb-3">Daftar Kategori</h4>
+                    <div id="categoryManageList" class="flex flex-col gap-2"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Activity Modal -->
+    <div id="activityModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-surface w-full max-w-md rounded-2xl shadow-xl overflow-hidden animate-scale-in">
+            <div class="p-5 border-b border-slate-100 flex justify-between items-center bg-teal-50">
+                <h3 class="font-semibold text-lg flex items-center gap-2">
+                    <div class="w-8 h-8 bg-teal-500 rounded-lg flex items-center justify-center shadow-sm">
+                        <i data-lucide="calendar-heart" class="w-4 h-4 text-white"></i>
+                    </div>
+                    <span id="activityModalTitle">Tambah Kegiatan</span>
+                </h3>
+                <button class="close-modal-btn p-1 text-slate-400 hover:bg-slate-100 rounded-full transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div class="p-6">
+                <form id="activityModalForm">
+                    <input type="hidden" id="activityId">
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Nama Kegiatan <span class="text-danger">*</span></label>
+                        <input type="text" id="activityName" class="w-full py-2 px-3 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" required placeholder="Contoh: Rapat Tim">
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Tanggal Mulai <span class="text-danger">*</span></label>
+                        <input type="date" id="activityStartDate" class="w-full py-2 px-3 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" required>
+                    </div>
+                    <div class="mb-6">
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Tanggal Selesai (Opsional)</label>
+                        <input type="date" id="activityEndDate" class="w-full py-2 px-3 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
+                    </div>
+                    <div class="flex flex-col gap-2">
+                        <button type="submit" class="w-full py-2.5 px-4 bg-teal-500 text-white rounded-xl font-medium hover:bg-teal-600 transition-colors">
+                            Simpan Kegiatan
+                        </button>
+                        <button type="button" id="deleteActivityBtn" class="hidden w-full py-2.5 px-4 bg-red-50 text-danger rounded-xl font-medium border border-red-100 hover:bg-red-100 transition-colors">
+                            Hapus Kegiatan
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirm Modal -->
+    <div id="confirmModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-surface w-full max-w-sm rounded-2xl shadow-xl overflow-hidden animate-scale-in p-6 text-center">
+            <div class="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 text-danger">
+                <i data-lucide="alert-circle" class="w-6 h-6"></i>
+            </div>
+            <h3 class="font-bold text-lg text-slate-800 mb-2">Konfirmasi</h3>
+            <p id="confirmMessage" class="text-slate-600 text-sm mb-6">Apakah Anda yakin?</p>
+            <div class="flex gap-3">
+                <button id="confirmCancelBtn" class="flex-1 py-2.5 px-4 bg-slate-100 text-slate-700 rounded-xl font-medium hover:bg-slate-200 transition-colors">Batal</button>
+                <button id="confirmOkBtn" class="flex-1 py-2.5 px-4 bg-danger text-white rounded-xl font-medium hover:bg-red-600 transition-colors shadow-md shadow-red-500/30">Ya, Lanjutkan</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Telegram Test Modal -->
+    <div id="testTgModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-surface w-full max-w-sm rounded-2xl shadow-xl overflow-hidden animate-scale-in">
+            <div class="p-5 border-b border-slate-100 flex justify-between items-center">
+                <h3 class="font-semibold text-lg flex items-center gap-2"><i data-lucide="send" class="w-5 h-5 text-primary"></i> Uji Notifikasi Telegram</h3>
+                <button class="close-modal-btn p-1 text-slate-400 hover:bg-slate-100 rounded-full transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div class="p-6">
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Pesan Uji Coba</label>
+                    <textarea id="tgTestMessage" rows="3" class="w-full py-2 px-3 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" placeholder="Ketik pesan percobaan di sini...">Halo! Ini adalah pesan uji coba dari aplikasi ProDo.</textarea>
+                    <p class="text-xs text-slate-500 mt-2">Pesan ini akan dikirim ke bot Telegram Anda.</p>
+                </div>
+                <button id="sendTgTestBtn" class="w-full py-2.5 px-4 bg-primary text-white rounded-xl font-medium hover:bg-indigo-600 transition-colors shadow-md shadow-primary/30 flex justify-center items-center gap-2">
+                    <i data-lucide="send" class="w-4 h-4"></i> Kirim Pesan
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toastContainer" class="fixed bottom-4 right-4 z-[60] flex flex-col gap-2 max-w-xs"></div>
+
+    <!-- Scripts -->
+    <script src="js/storage.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/notifications.js"></script>
+    <script src="js/dashboard.js"></script>
+    <script src="js/app.js"></script>
+    <script src="js/calendar.js"></script>
+</body>
+</html>

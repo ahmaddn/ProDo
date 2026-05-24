@@ -1,0 +1,202 @@
+/* css/style.css */
+
+/* Hide scrollbar for category list but keep functionality */
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;
+}
+.scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+/* Custom Scrollbar for task columns */
+.task-column::-webkit-scrollbar {
+    width: 6px;
+}
+.task-column::-webkit-scrollbar-track {
+    background: transparent;
+}
+.task-column::-webkit-scrollbar-thumb {
+    background-color: #cbd5e1;
+    border-radius: 20px;
+}
+.task-column::-webkit-scrollbar-thumb:hover {
+    background-color: #94a3b8;
+}
+
+/* Kanban Board — limit column height so it doesn't stretch on zoom out */
+.kanban-board {
+    width: 100%;
+}
+
+.kanban-column {
+    align-self: flex-start;
+}
+
+.task-column {
+    max-height: 420px;
+    overflow-y: auto;
+    min-height: 0;
+}
+
+/* Animations */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scaleIn {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes bounceShort {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5%); }
+}
+
+@keyframes checkmark {
+    0% { transform: scale(0); opacity: 0; }
+    50% { transform: scale(1.2); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+.animate-fade-in {
+    animation: fadeIn 0.3s ease-out forwards;
+}
+
+.animate-scale-in {
+    animation: scaleIn 0.2s ease-out forwards;
+}
+
+.animate-bounce-short {
+    animation: bounceShort 1s ease-in-out 3;
+}
+
+.task-item {
+    transition: all 0.2s ease;
+}
+
+.task-item.completed {
+    background-color: #f8fafc;
+    opacity: 0.7;
+}
+
+.task-item.completed .task-title {
+    text-decoration: line-through;
+    color: #94a3b8;
+}
+
+.check-icon-anim {
+    animation: checkmark 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+/* Sortable JS styling */
+.sortable-ghost {
+    opacity: 0.4;
+    background-color: #f1f5f9;
+}
+
+.sortable-drag {
+    cursor: grabbing !important;
+    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+}
+
+.task-handle {
+    cursor: grab;
+}
+
+.task-handle:active {
+    cursor: grabbing;
+}
+
+/* Category pills — wrapper gives breathing room so ring/shadow isn't clipped */
+.category-pill-wrapper {
+    padding: 4px 0;
+}
+.category-pill {
+    transition: all 0.2s;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+/* FullCalendar custom event with Lucide icons */
+.fc-custom-event {
+    width: 100%;
+    line-height: 1.2;
+}
+.fc-custom-event [data-lucide] {
+    flex-shrink: 0;
+}
+
+.color-swatch {
+    cursor: pointer;
+    border: 2px solid transparent;
+}
+
+.category-color-wheel {
+    -webkit-appearance: none;
+    appearance: none;
+    padding: 0;
+    background: transparent;
+}
+
+.category-color-wheel::-webkit-color-swatch-wrapper {
+    padding: 2px;
+}
+
+.category-color-wheel::-webkit-color-swatch {
+    border: none;
+    border-radius: 0.5rem;
+}
+
+.category-color-wheel::-moz-color-swatch {
+    border: none;
+    border-radius: 0.5rem;
+}
+
+/* Page Tab Navigation */
+.tab-btn {
+    color: #64748b;
+}
+.tab-btn.active-tab {
+    background: white;
+    color: #6366f1;
+    font-weight: 600;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+/* Stat card number animation */
+@keyframes countUp {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+.stat-num {
+    animation: countUp 0.4s ease-out forwards;
+}
+
+/* ────────────────────────────────────────────────
+   Page Transition System — keyframe based
+   (avoids display:none conflict with CSS transitions)
+   ──────────────────────────────────────────────── */
+
+@keyframes pageIn {
+    from { opacity: 0; transform: translateY(14px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pageOut {
+    from { opacity: 1; transform: translateY(0); }
+    to   { opacity: 0; transform: translateY(-8px); }
+}
+
+/* Outgoing page plays fade-out animation */
+.page-anim-out {
+    animation: pageOut 0.18s cubic-bezier(0.4, 0, 1, 1) forwards;
+    pointer-events: none;
+}
+
+/* Incoming page plays fade-in animation */
+.page-anim-in {
+    animation: pageIn 0.28s cubic-bezier(0, 0, 0.2, 1) forwards;
+}
