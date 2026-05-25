@@ -333,6 +333,10 @@ const Storage = {
             updatedAt: now
         };
         await this._userCol('tasks').doc(id).set(newTask);
+        this.cache.tasks.push(newTask); // Manually update cache for immediate sync
+        if (newTask.targetId) {
+            await this.syncTargetProgress(newTask.targetId);
+        }
         return newTask;
     },
 
@@ -368,7 +372,7 @@ const Storage = {
         }
 
         await this.updateTask(id, updates);
-        if (updates.completed && task.targetId) await this.syncTargetProgress(task.targetId);
+        // syncTargetProgress is already handled inside updateTask
         return updates;
     },
 
@@ -384,18 +388,41 @@ const Storage = {
 
     async updateTask(idOrTask, maybeUpdates) {
         const { id, updates } = this._parseIdAndUpdates(idOrTask, maybeUpdates);
+        
+        // Find old target to sync if it's being changed
+        const oldTask = this.cache.tasks.find((t) => t.id === id);
+        const oldTargetId = oldTask ? oldTask.targetId : null;
+
         await this._userCol('tasks').doc(id).update(updates);
+        
         const idx = this.cache.tasks.findIndex((t) => t.id === id);
         if (idx !== -1) Object.assign(this.cache.tasks[idx], updates);
-        if (updates.completed !== undefined || updates.targetId !== undefined) {
-            const task = this.cache.tasks.find((t) => t.id === id);
-            if (task?.targetId) await this.syncTargetProgress(task.targetId);
+        
+        const newTask = this.cache.tasks.find((t) => t.id === id);
+        const newTargetId = newTask ? newTask.targetId : null;
+
+        if (updates.completed !== undefined || updates.targetId !== undefined || updates.status !== undefined) {
+            // Sync old target if targetId was changed to something else
+            if (oldTargetId && oldTargetId !== newTargetId) {
+                await this.syncTargetProgress(oldTargetId);
+            }
+            // Sync new target
+            if (newTargetId) {
+                await this.syncTargetProgress(newTargetId);
+            }
         }
     },
 
     async deleteTask(id) {
+        const task = this.cache.tasks.find((t) => t.id === id);
+        const targetId = task ? task.targetId : null;
+        
         await this._userCol('tasks').doc(id).delete();
         this.cache.tasks = this.cache.tasks.filter((t) => t.id !== id);
+        
+        if (targetId) {
+            await this.syncTargetProgress(targetId);
+        }
     },
 
     async toggleTask(id) {
@@ -404,7 +431,7 @@ const Storage = {
         const completed = !task.completed;
         const column = completed ? 'done' : (task.column === 'done' ? 'todo' : task.column);
         await this.updateTask(id, { completed, column });
-        await this.syncTargetProgress(task.targetId);
+        // syncTargetProgress is already handled inside updateTask
         await this.updateStreak();
     },
 
