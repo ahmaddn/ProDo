@@ -96,6 +96,8 @@ async function processUser(db, uid) {
         }
     }
 
+    const now = dayjs().tz(TZ);
+
     for (const doc of tasksSnap.docs) {
         const task = { id: doc.id, ...doc.data() };
         if (task.completed || !task.dueDate) continue;
@@ -104,26 +106,52 @@ async function processUser(db, uid) {
         const title = escapeHtml(task.title);
         const due = formatDate(task.dueDate);
 
-        if (days < 0) {
+        if (days < 0 && !task.dueTime) {
             await trySend(
                 `task:${task.id}:overdue`,
                 `<b>Tugas terlewat</b>\n\n"${title}"\nJatuh tempo: ${due}\n\nSegera selesaikan di ProDo.`
             );
-        } else if (days === 3) {
+        }
+
+        if (days === 3) {
             await trySend(
                 `task:${task.id}:h-3`,
                 `<b>Pengingat tugas (H-3)</b>\n\n"${title}"\nJatuh tempo 3 hari lagi (${due}).`
             );
-        } else if (days === 1) {
+        }
+
+        if (days === 1) {
             await trySend(
                 `task:${task.id}:h-1`,
                 `<b>Pengingat tugas (H-1)</b>\n\n"${title}"\nJatuh tempo besok (${due}).`
             );
-        } else if (days === 0) {
+        }
+
+        if (days === 0 && !task.dueTime) {
             await trySend(
                 `task:${task.id}:h0`,
                 `<b>Pengingat tugas (Hari H)</b>\n\n"${title}"\nJatuh tempo hari ini.`
             );
+        }
+
+        if (task.dueTime) {
+            const dueAt = dayjs.tz(`${task.dueDate} ${task.dueTime}`, 'YYYY-MM-DD HH:mm', TZ);
+            if (!dueAt.isValid()) continue;
+            const when = `${dueAt.format('D MMM YYYY')} pukul ${dueAt.format('HH:mm')}`;
+            const minsUntil = dueAt.diff(now, 'minute');
+
+            if (minsUntil > 0 && minsUntil <= 30) {
+                await trySend(
+                    `task:${task.id}:warn-30m`,
+                    `<b>Pengingat tugas (30 menit lagi)</b>\n\n"${title}"\nDeadline: <b>${when}</b>.`
+                );
+            }
+            if (now.isAfter(dueAt)) {
+                await trySend(
+                    `task:${task.id}:past-time`,
+                    `<b>Tugas belum selesai — waktu habis!</b>\n\n"${title}"\nDeadline: <b>${when}</b>.\n\nSegera selesaikan di ProDo.`
+                );
+            }
         }
     }
 

@@ -193,7 +193,29 @@ const UI = {
         });
     },
 
+    renderTaskProgressSnippet(task) {
+        const pct = typeof task.progressPercent === 'number' ? task.progressPercent : 0;
+        const status = Storage.getTaskStatus(task);
+        if (!task.progressNote && pct === 0 && status === 'todo') return '';
+
+        const statusLabel = status === 'in_progress' ? 'Sedang dikerjakan' : status === 'completed' ? 'Selesai' : '';
+        const barColor = status === 'completed' ? 'bg-success' : 'bg-primary';
+
+        return `
+            <div class="mt-2">
+                ${statusLabel ? `<span class="text-[10px] font-medium text-amber-700">${statusLabel} · ${pct}%</span>` : `<span class="text-[10px] text-slate-500">${pct}%</span>`}
+                <div class="w-full bg-slate-100 rounded-full h-1 mt-0.5">
+                    <div class="${barColor} h-1 rounded-full" style="width: ${pct}%"></div>
+                </div>
+                ${task.progressNote ? `<p class="text-[10px] text-slate-500 mt-0.5 line-clamp-1">${task.progressNote.replace(/</g, '&lt;')}</p>` : ''}
+            </div>
+        `;
+    },
+
     resolveTaskColumn(task) {
+        const status = Storage.getTaskStatus(task);
+        if (status === 'completed' || task.completed) return 'done';
+        if (status === 'in_progress') return 'focus';
         if (task.column) return task.column;
         if (task.completed) return 'done';
         const today = dayjs().startOf('day');
@@ -244,11 +266,25 @@ const UI = {
                     dueClass = 'text-danger font-medium';
                     isOverdue = true;
                 } else if (dueDate.isSame(today)) {
-                    dueText = 'Hari ini';
+                    dueText = task.dueTime ? `Hari ini, ${task.dueTime}` : 'Hari ini';
                     dueClass = 'text-warning font-medium';
                     isToday = true;
                 } else {
-                    dueText = dueDate.format('D MMM YYYY');
+                    dueText = task.dueTime
+                        ? `${dueDate.format('D MMM YYYY')}, ${task.dueTime}`
+                        : dueDate.format('D MMM YYYY');
+                }
+
+                if (task.dueTime && !task.completed) {
+                    const dueAt = dayjs(`${task.dueDate}T${task.dueTime}`);
+                    if (dueAt.isValid() && dayjs().isAfter(dueAt)) {
+                        dueText = task.dueTime
+                            ? `Terlewat · ${dueDate.format('D MMM')}, ${task.dueTime}`
+                            : `Terlewat: ${dueDate.format('D MMM')}`;
+                        dueClass = 'text-danger font-medium';
+                        isOverdue = true;
+                        isToday = false;
+                    }
                 }
             }
 
@@ -273,8 +309,12 @@ const UI = {
                             ${catBadge}
                         </div>
                         ${dueBadge}
+                        ${this.renderTaskProgressSnippet(task)}
                     </div>
                     <div class="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 flex-col sm:flex-row">
+                        <button class="task-progress-btn p-1.5 text-slate-400 hover:text-amber-600 bg-slate-50 hover:bg-amber-50 rounded-lg" data-id="${task.id}" title="Update progress">
+                            <i data-lucide="clipboard-list" class="w-3.5 h-3.5"></i>
+                        </button>
                         <button class="edit-task-btn p-1.5 text-slate-400 hover:text-primary bg-slate-50 hover:bg-indigo-50 rounded-lg" data-id="${task.id}">
                             <i data-lucide="edit-2" class="w-3.5 h-3.5"></i>
                         </button>
@@ -431,6 +471,27 @@ const UI = {
             this.showToast(`Gagal ${actionLabel}.`, 'error');
             return { ok: false, error };
         }
+    },
+
+    showInfo(title, htmlContent) {
+        const titleEl = document.getElementById('confirmModalTitle');
+        if (titleEl) titleEl.textContent = title;
+        this.elements.confirmMessage.innerHTML = htmlContent;
+        this.elements.confirmCancelBtn.classList.add('hidden');
+        this.elements.confirmOkBtn.textContent = 'Tutup';
+        this.elements.confirmModal.classList.remove('hidden');
+
+        const cleanup = () => {
+            this.elements.confirmModal.classList.add('hidden');
+            this.elements.confirmMessage.textContent = 'Apakah Anda yakin?';
+            if (titleEl) titleEl.textContent = 'Konfirmasi';
+            this.elements.confirmCancelBtn.classList.remove('hidden');
+            this.elements.confirmOkBtn.textContent = 'Ya, Lanjutkan';
+            this.elements.confirmOkBtn.removeEventListener('click', okHandler);
+        };
+
+        const okHandler = () => cleanup();
+        this.elements.confirmOkBtn.addEventListener('click', okHandler);
     },
 
     showConfirm(message, onConfirm) {

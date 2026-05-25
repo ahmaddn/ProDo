@@ -22,6 +22,8 @@ Aplikasi produktivitas berbasis web untuk mengelola tugas, target, dan kegiatan 
 - **Jatuh tempo & target terkait** — setiap tugas dapat memiliki deadline dan dikaitkan ke target.
 - **Filter & pencarian** — filter status/prioritas dan pencarian judul tugas.
 - **Drag & drop** — pindahkan tugas antar kolom; posisi kolom tersimpan.
+- **Catatan progress** — saat menyelesaikan atau update progress: persentase + catatan “sampai mana” tugas berjalan.
+- **Halaman Riwayat** — daftar semua tugas dengan filter: belum selesai, sedang dikerjakan, selesai; plus log riwayat per tugas.
 
 ### Target Tracking
 - **Tipe target** — harian, mingguan, atau jangka panjang.
@@ -36,7 +38,7 @@ Aplikasi produktivitas berbasis web untuk mengelola tugas, target, dan kegiatan 
 ### Motivasi & Pengingat
 - **Streak** — menghitung hari beruntun saat menyelesaikan tugas.
 - **Nagging banner** — peringatan untuk tugas yang sudah melewati batas waktu.
-- **Notifikasi Telegram** — pengingat H-3, H-1, hari H, dan tugas terlewat; kegiatan H-3, H-1, dan hari H. Bisa otomatis 24/7 via GitHub Actions (lihat `docs/TELEGRAM-CRON-SETUP.md`).
+- **Notifikasi Telegram** — pengingat H-3, H-1, hari H, tugas terlewat; untuk tugas hari ini dengan **jam deadline**: peringatan 30 menit sebelumnya dan saat waktu habis belum selesai. Bisa otomatis 24/7 via GitHub Actions (lihat `docs/TELEGRAM-CRON-SETUP.md`).
 
 ### Pengaturan Data
 - **Export & import JSON** — cadangkan atau pulihkan seluruh data akun.

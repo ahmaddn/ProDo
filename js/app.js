@@ -19,6 +19,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const newTaskCategory = document.getElementById('newTaskCategory');
     const newTaskPriority = document.getElementById('newTaskPriority');
     const newTaskDueDate  = document.getElementById('newTaskDueDate');
+    const newTaskDueTime  = document.getElementById('newTaskDueTime');
+    const taskDueTimeWrap = document.getElementById('taskDueTimeWrap');
     const newTaskTarget   = document.getElementById('newTaskTarget');
     const filterSelect    = document.getElementById('filterSelect');
     const searchInput     = document.getElementById('searchInput');
@@ -87,19 +89,55 @@ document.addEventListener('DOMContentLoaded', async () => {
     const pageDashboard  = document.getElementById('pageDashboard');
     const pageTodolist   = document.getElementById('pageTodolist');
     const pageCalendar   = document.getElementById('pageCalendar');
+    const pageHistory    = document.getElementById('pageHistory');
     const tabDashboard   = document.getElementById('tabDashboard');
     const tabTodolist    = document.getElementById('tabTodolist');
     const tabCalendar    = document.getElementById('tabCalendar');
+    const tabHistory     = document.getElementById('tabHistory');
+
+    const taskProgressModal       = document.getElementById('taskProgressModal');
+    const taskProgressTaskId      = document.getElementById('taskProgressTaskId');
+    const taskProgressTaskName    = document.getElementById('taskProgressTaskName');
+    const taskProgressPercent     = document.getElementById('taskProgressPercent');
+    const taskProgressPercentLabel = document.getElementById('taskProgressPercentLabel');
+    const taskProgressNote        = document.getElementById('taskProgressNote');
+    const taskProgressSaveBtn     = document.getElementById('taskProgressSaveBtn');
+    const taskProgressCompleteBtn = document.getElementById('taskProgressCompleteBtn');
+    const closeTaskProgressModal  = document.getElementById('closeTaskProgressModal');
+    const historySearchInput      = document.getElementById('historySearchInput');
 
     let authMode = 'login';
 
     newTaskDueDate.value = dayjs().format('YYYY-MM-DD');
+    setTaskDueDateMin();
+
+    function setTaskDueDateMin() {
+        if (newTaskDueDate) {
+            newTaskDueDate.min = dayjs().format('YYYY-MM-DD');
+        }
+    }
+
+    function syncTaskDueTimeField() {
+        if (!taskDueTimeWrap || !newTaskDueDate) return;
+        taskDueTimeWrap.classList.toggle('hidden', !newTaskDueDate.value);
+    }
+
+    function getTaskDueTimeForSave(dueDate) {
+        if (!dueDate) return null;
+        const t = newTaskDueTime?.value?.trim();
+        return t || null;
+    }
+
+    setTaskDueDateMin();
+    newTaskDueDate.addEventListener('change', syncTaskDueTimeField);
+    syncTaskDueTimeField();
 
     // ─── Page Navigation (sequential keyframe transitions) ───────
     const allPages = [
         { el: pageDashboard, key: 'dashboard' },
         { el: pageTodolist,  key: 'todolist'  },
-        { el: pageCalendar,  key: 'calendar'  }
+        { el: pageCalendar,  key: 'calendar'  },
+        { el: pageHistory,   key: 'history'   }
     ];
 
     let isTransitioning = false;
@@ -120,12 +158,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (page === 'calendar' && typeof CalendarUI !== 'undefined') {
             setTimeout(() => CalendarUI.render(), 50);
         }
+        if (page === 'history' && typeof TaskHistory !== 'undefined') {
+            TaskHistory.render();
+        }
     }
 
     function updateTabs(page) {
         tabDashboard.classList.toggle('active-tab', page === 'dashboard');
         tabTodolist.classList.toggle('active-tab', page === 'todolist');
         tabCalendar.classList.toggle('active-tab', page === 'calendar');
+        tabHistory.classList.toggle('active-tab', page === 'history');
     }
 
     function switchPage(page) {
@@ -178,6 +220,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     tabDashboard.addEventListener('click', () => switchPage('dashboard'));
     tabTodolist.addEventListener('click',  () => switchPage('todolist'));
     tabCalendar.addEventListener('click',  () => switchPage('calendar'));
+    tabHistory.addEventListener('click',  () => switchPage('history'));
 
     // ─── Auth ────────────────────────────────────────────────────
     function setAuthLoading(loading) {
@@ -194,6 +237,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             appContainer.classList.remove('hidden');
             appContainer.classList.add('flex');
             logoutBtn.classList.remove('hidden');
+            exportImportBtn.classList.remove('hidden');
             pageTabs.classList.remove('hidden');
             pageTabs.classList.add('flex');
             streakBadge.classList.remove('hidden');
@@ -205,9 +249,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             appContainer.classList.add('hidden');
             appContainer.classList.remove('flex');
             logoutBtn.classList.add('hidden');
+            exportImportBtn.classList.add('hidden');
             pageTabs.classList.add('hidden');
             pageTabs.classList.remove('flex');
             streakBadge.classList.add('hidden');
+            settingsModal.classList.add('hidden');
         }
     }
 
@@ -328,8 +374,69 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (activePage === 'dashboard') Dashboard.render();
         else if (activePage === 'todolist') renderTodolist();
         else if (activePage === 'calendar' && typeof CalendarUI !== 'undefined') CalendarUI.render();
-        // Always keep todolist data fresh for dashboard stats
+        else if (activePage === 'history' && typeof TaskHistory !== 'undefined') TaskHistory.render();
     }
+
+    function syncProgressPercentLabel() {
+        const v = parseInt(taskProgressPercent.value, 10) || 0;
+        taskProgressPercentLabel.textContent = `${v}%`;
+    }
+
+    function openTaskProgressModal(task, intent = 'progress') {
+        taskProgressTaskId.value = task.id;
+        taskProgressTaskName.textContent = task.title;
+        const pct = intent === 'complete'
+            ? (task.progressPercent > 0 ? task.progressPercent : 100)
+            : (task.progressPercent || 0);
+        taskProgressPercent.value = pct;
+        syncProgressPercentLabel();
+        taskProgressNote.value = task.progressNote || '';
+        taskProgressModal.classList.remove('hidden');
+        lucide.createIcons();
+    }
+
+    function closeTaskProgressModalFn() {
+        taskProgressModal.classList.add('hidden');
+        renderTodolist();
+    }
+
+    taskProgressPercent.addEventListener('input', syncProgressPercentLabel);
+    closeTaskProgressModal.addEventListener('click', closeTaskProgressModalFn);
+
+    taskProgressSaveBtn.addEventListener('click', () => {
+        const id = taskProgressTaskId.value;
+        const note = taskProgressNote.value.trim();
+        const percent = parseInt(taskProgressPercent.value, 10) || 0;
+        if (!note && percent === 0) {
+            UI.showToast('Isi catatan progress atau geser persentase.', 'error');
+            return;
+        }
+        UI.runOp('menyimpan progress', async () => {
+            await Storage.saveTaskProgress(id, {
+                action: percent >= 100 ? 'completed' : 'in_progress',
+                note: note || `Progress ${percent}%`,
+                progressPercent: percent
+            });
+            taskProgressModal.classList.add('hidden');
+            refreshCurrentPage();
+        }, 'Progress tugas disimpan.');
+    });
+
+    taskProgressCompleteBtn.addEventListener('click', () => {
+        const id = taskProgressTaskId.value;
+        const note = taskProgressNote.value.trim();
+        const percent = parseInt(taskProgressPercent.value, 10) || 100;
+        UI.runOp('menyelesaikan tugas', async () => {
+            await Storage.saveTaskProgress(id, {
+                action: 'completed',
+                note: note || 'Tugas selesai',
+                progressPercent: Math.max(percent, 100)
+            });
+            await Storage.checkAndUpdateStreak();
+            taskProgressModal.classList.add('hidden');
+            refreshCurrentPage();
+        }, 'Tugas ditandai selesai.');
+    });
 
     function getDefaultColumn({ priority, dueDate }) {
         const today = dayjs().startOf('day');
@@ -351,25 +458,25 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         const toColumn = evt.to.id;
-        let successMsg = 'Tugas dipindahkan.';
 
         if (toColumn === 'taskListDone') {
-            task.completed = true;
-            task.column = 'done';
-            await Storage.checkAndUpdateStreak();
-            successMsg = 'Tugas dipindah ke Selesai.';
-        } else if (toColumn === 'taskListImportant') {
-            task.completed = false;
-            task.column = 'focus';
+            openTaskProgressModal(task, 'complete');
+            return;
+        }
+
+        let updates = {};
+        let successMsg = 'Tugas dipindahkan.';
+
+        if (toColumn === 'taskListImportant') {
+            updates = { completed: false, column: 'focus', status: 'in_progress' };
             successMsg = 'Tugas dipindah ke Fokus / Hari Ini.';
         } else if (toColumn === 'taskListTodo') {
-            task.completed = false;
-            task.column = 'todo';
+            updates = { completed: false, column: 'todo', status: 'todo' };
             successMsg = 'Tugas dipindah ke Belum Dimulai.';
         }
 
         UI.runOp('memindahkan tugas', async () => {
-            await Storage.updateTask(task);
+            await Storage.updateTask(task.id, updates);
             renderTodolist();
         }, successMsg);
     }
@@ -420,6 +527,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('taskModalTitle').textContent = 'Tugas Baru';
         newTaskPriority.value = 'medium';
         newTaskDueDate.value  = dayjs().format('YYYY-MM-DD');
+        setTaskDueDateMin();
+        if (newTaskDueTime) newTaskDueTime.value = '';
+        syncTaskDueTimeField();
         taskInput.value = '';
         addTaskModal.classList.remove('hidden');
         setTimeout(() => taskInput.focus(), 100);
@@ -433,6 +543,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         newTaskCategory.value = task.categoryId || '';
         newTaskPriority.value = task.priority;
         newTaskDueDate.value  = task.dueDate || '';
+        setTaskDueDateMin();
+        if (newTaskDueTime) newTaskDueTime.value = task.dueTime || '';
+        syncTaskDueTimeField();
         newTaskTarget.value   = task.targetId || '';
         addTaskModal.classList.remove('hidden');
         setTimeout(() => taskInput.focus(), 100);
@@ -446,7 +559,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!title) return;
 
         const dueDate = newTaskDueDate.value || null;
+        const dueTime = getTaskDueTimeForSave(dueDate);
         const priority = newTaskPriority.value;
+
+        if (dueDate && dueDate < dayjs().format('YYYY-MM-DD')) {
+            UI.showToast('Jatuh tempo tidak boleh sebelum hari ini.', 'error');
+            return;
+        }
 
         if (editingTaskId) {
             const tasks = Storage.getTasks();
@@ -461,6 +580,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     categoryId: newTaskCategory.value || null,
                     priority,
                     dueDate,
+                    dueTime,
                     targetId: newTaskTarget.value || null
                 });
             }, 'Tugas berhasil diperbarui!');
@@ -470,6 +590,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 categoryId: newTaskCategory.value || null,
                 priority,
                 dueDate,
+                dueTime,
                 targetId: newTaskTarget.value || null,
                 column: getDefaultColumn({ priority, dueDate })
             }), 'Tugas berhasil ditambahkan!');
@@ -489,6 +610,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         const toggleBtn = e.target.closest('.toggle-task-btn');
         const deleteBtn = e.target.closest('.delete-task-btn');
         const editBtn   = e.target.closest('.edit-task-btn');
+        const progressBtn = e.target.closest('.task-progress-btn');
+
+        if (progressBtn) {
+            const task = Storage.getTasks().find(t => t.id === progressBtn.dataset.id);
+            if (task) openTaskProgressModal(task, 'progress');
+            return;
+        }
 
         if (toggleBtn) {
             const tasks = Storage.getTasks();
@@ -497,15 +625,18 @@ document.addEventListener('DOMContentLoaded', async () => {
                 console.error('[ProDo] Gagal mengubah status tugas: tugas tidak ditemukan', toggleBtn.dataset.id);
                 return;
             }
-            const willComplete = !task.completed;
-            UI.runOp('mengubah status tugas', async () => {
-                await Storage.updateTask(task.id, {
-                    completed: willComplete,
-                    column: willComplete ? 'done' : 'todo'
+            if (!task.completed) {
+                openTaskProgressModal(task, 'complete');
+                return;
+            }
+            UI.runOp('membuka kembali tugas', async () => {
+                await Storage.saveTaskProgress(task.id, {
+                    action: 'reopened',
+                    note: 'Tugas dibuka kembali',
+                    progressPercent: 0
                 });
-                if (willComplete) await Storage.checkAndUpdateStreak();
-                renderTodolist();
-            }, willComplete ? 'Tugas ditandai selesai.' : 'Tugas dibuka kembali.');
+                refreshCurrentPage();
+            }, 'Tugas dibuka kembali.');
         }
 
         if (deleteBtn) {
@@ -625,6 +756,35 @@ document.addEventListener('DOMContentLoaded', async () => {
     filterSelect.addEventListener('change', (e) => { currentFilter = e.target.value; renderTodolist(); });
     searchInput.addEventListener('input',  (e) => { searchQuery = e.target.value; renderTodolist(); });
 
+    // ─── History Page ────────────────────────────────────────────
+    document.getElementById('historyStatusFilters')?.addEventListener('click', (e) => {
+        const btn = e.target.closest('.history-filter-btn');
+        if (!btn) return;
+        document.querySelectorAll('.history-filter-btn').forEach((b) => {
+            b.classList.remove('active-history-filter', 'bg-slate-800', 'text-white');
+            b.classList.add('bg-slate-100', 'text-slate-600');
+        });
+        btn.classList.add('active-history-filter', 'bg-slate-800', 'text-white');
+        btn.classList.remove('bg-slate-100', 'text-slate-600');
+        TaskHistory.currentFilter = btn.dataset.status;
+        TaskHistory.render();
+    });
+
+    historySearchInput?.addEventListener('input', (e) => {
+        TaskHistory.searchQuery = e.target.value;
+        TaskHistory.render();
+    });
+
+    pageHistory?.addEventListener('click', (e) => {
+        const progressBtn = e.target.closest('.history-progress-btn');
+        const logBtn = e.target.closest('.history-view-log-btn');
+        if (progressBtn) {
+            const task = Storage.getTasks().find(t => t.id === progressBtn.dataset.id);
+            if (task) openTaskProgressModal(task, 'progress');
+        }
+        if (logBtn) TaskHistory.showLogModal(logBtn.dataset.id);
+    });
+
     // ─── Targets ─────────────────────────────────────────────────
     addTargetBtn.addEventListener('click', () => {
         targetModalForm.reset();
@@ -738,6 +898,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // ─── App Settings & Export ───────────────────────────────────────────
     exportImportBtn.addEventListener('click', () => {
+        if (!Storage.isLoggedIn()) return;
         const s = Storage.getTgSettings();
         tgBotTokenInput.value = s.botToken;
         tgChatIdInput.value   = s.chatId;
@@ -828,7 +989,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     clearDataBtn.addEventListener('click', () => {
-        UI.showConfirm('PERINGATAN! Ini akan menghapus SEMUA data tugas dan target Anda. Lanjutkan?', () => {
+        UI.showConfirm('PERINGATAN! Semua data akun yang sedang login (tugas, target, kategori, kegiatan, pengaturan) akan dihapus permanen. Akun lain tidak terpengaruh. Lanjutkan?', () => {
             UI.runOp('menghapus semua data', async () => {
                 await Storage.clearAll();
                 refreshCurrentPage();

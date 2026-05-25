@@ -118,7 +118,9 @@ const Storage = {
         cols.forEach((col) => {
             const unsub = this._userCol(col).onSnapshot(
                 (snap) => {
-                    this.cache[col] = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+                    this.cache[col] = col === 'tasks'
+                        ? snap.docs.map((d) => this.normalizeTask({ id: d.id, ...d.data() }))
+                        : snap.docs.map((d) => ({ id: d.id, ...d.data() }));
                     this._dispatchChange();
                 },
                 onSnapError
@@ -173,7 +175,7 @@ const Storage = {
             this._db.collection('users').doc(this._uid).collection('meta').doc('notificationLog').get()
         ]);
 
-        this.cache.tasks = tasksSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        this.cache.tasks = tasksSnap.docs.map((d) => this.normalizeTask({ id: d.id, ...d.data() }));
         this.cache.targets = targetsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
         this.cache.categories = catsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
         this.cache.activities = actsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
@@ -289,24 +291,85 @@ const Storage = {
     // ─── Tasks (read sync, write async) ──────────────────────────
 
     getTasks() {
-        return [...this.cache.tasks];
+        return this.cache.tasks.map((t) => this.normalizeTask(t));
+    },
+
+    normalizeTask(task) {
+        const t = { ...task };
+        if (!t.status) {
+            if (t.completed) t.status = 'completed';
+            else if (t.column === 'focus' || (t.progressPercent > 0 && t.progressNote)) t.status = 'in_progress';
+            else t.status = 'todo';
+        }
+        t.progressNote = t.progressNote || '';
+        t.progressPercent = typeof t.progressPercent === 'number' ? t.progressPercent : 0;
+        t.historyLog = Array.isArray(t.historyLog) ? t.historyLog : [];
+        t.dueTime = t.dueTime || null;
+        return t;
+    },
+
+    getTaskStatus(task) {
+        return this.normalizeTask(task).status;
     },
 
     async addTask(task) {
         const id = 't_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+        const now = new Date().toISOString();
         const newTask = {
             id,
             title: task.title,
             categoryId: task.categoryId || null,
             priority: task.priority || 'medium',
             dueDate: task.dueDate || null,
+            dueTime: task.dueTime || null,
             targetId: task.targetId || null,
             completed: false,
+            status: 'todo',
             column: task.column || 'todo',
-            createdAt: new Date().toISOString()
+            progressNote: '',
+            progressPercent: 0,
+            historyLog: [{ at: now, type: 'created', note: 'Tugas dibuat', progressPercent: 0 }],
+            createdAt: now,
+            updatedAt: now
         };
         await this._userCol('tasks').doc(id).set(newTask);
         return newTask;
+    },
+
+    async saveTaskProgress(id, { action, note = '', progressPercent = 0 }) {
+        const task = this.cache.tasks.find((t) => t.id === id);
+        if (!task) throw new Error('Tugas tidak ditemukan');
+
+        const now = new Date().toISOString();
+        const pct = Math.min(100, Math.max(0, Number(progressPercent) || 0));
+        const entry = { at: now, type: action, note: String(note || '').trim(), progressPercent: pct };
+        const historyLog = [...(task.historyLog || []), entry];
+
+        const updates = {
+            historyLog,
+            progressNote: entry.note,
+            progressPercent: pct,
+            updatedAt: now
+        };
+
+        if (action === 'completed') {
+            Object.assign(updates, { completed: true, status: 'completed', column: 'done' });
+        } else if (action === 'in_progress') {
+            Object.assign(updates, { completed: false, status: 'in_progress', column: 'focus' });
+        } else if (action === 'reopened') {
+            Object.assign(updates, { completed: false, status: 'todo', column: 'todo', progressPercent: 0, progressNote: '' });
+        } else if (action === 'progress') {
+            const status = pct >= 100 ? 'completed' : 'in_progress';
+            Object.assign(updates, {
+                completed: pct >= 100,
+                status,
+                column: pct >= 100 ? 'done' : 'focus'
+            });
+        }
+
+        await this.updateTask(id, updates);
+        if (updates.completed && task.targetId) await this.syncTargetProgress(task.targetId);
+        return updates;
     },
 
     _parseIdAndUpdates(idOrDoc, maybeUpdates) {
@@ -568,8 +631,10 @@ const Storage = {
             snap.docs.forEach((d) => batch.delete(d.ref));
         }
         batch.set(this._metaRef('stats'), { streak: 0, lastActiveDate: null });
+        batch.set(this._metaRef('settings'), { botToken: '', chatId: '' });
         batch.set(this._metaRef('notificationLog'), { sent: {} });
         await batch.commit();
+        this.cache.tgSettings = { botToken: '', chatId: '' };
         await this._loadAll();
         await this._seedDefaults();
     },

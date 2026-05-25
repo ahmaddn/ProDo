@@ -1,11 +1,11 @@
-// js/notifications.js — Pengingat Telegram (H-3, H-1, H, terlewat)
+// js/notifications.js — Pengingat Telegram (H-3, H-1, H, terlewat, waktu hari ini)
 
 const AppNotifications = {
     _checkTimer: null,
     _debounceTimer: null,
     _running: false,
-  /** Interval cek saat aplikasi terbuka (15 menit) */
-    CHECK_INTERVAL_MS: 15 * 60 * 1000,
+    /** Interval cek saat aplikasi terbuka (5 menit — agar peringatan waktu lebih tepat) */
+    CHECK_INTERVAL_MS: 5 * 60 * 1000,
 
     async init() {
         this.startScheduler();
@@ -59,11 +59,49 @@ const AppNotifications = {
         return dayjs(dateStr).format('D MMM YYYY');
     },
 
+    _getDueDateTime(task) {
+        if (!task.dueDate || !task.dueTime) return null;
+        const parsed = dayjs(`${task.dueDate}T${task.dueTime}`);
+        return parsed.isValid() ? parsed : null;
+    },
+
+    _formatDueDateTime(task) {
+        const dt = this._getDueDateTime(task);
+        if (!dt) return this._formatDate(task.dueDate);
+        return `${dt.format('D MMM YYYY')} pukul ${dt.format('HH:mm')}`;
+    },
+
     async _trySend(key, message) {
         if (Storage.wasNotificationSentToday(key)) return false;
         const result = await this.notify(message);
         if (result.success) {
             await Storage.markNotificationSent(key);
+            return true;
+        }
+        return false;
+    },
+
+    /** @returns {boolean} true jika deadline datetime sudah lewat */
+    async _checkTaskDueDateTime(task, title) {
+        const dueAt = this._getDueDateTime(task);
+        if (!dueAt) return false;
+
+        const now = dayjs();
+        const when = this._formatDueDateTime(task);
+        const minsUntil = dueAt.diff(now, 'minute');
+
+        if (minsUntil > 0 && minsUntil <= 30) {
+            await this._trySend(
+                `task:${task.id}:warn-30m`,
+                `<b>Pengingat tugas (30 menit lagi)</b>\n\n"${title}"\nDeadline: <b>${when}</b>.`
+            );
+        }
+
+        if (now.isAfter(dueAt)) {
+            await this._trySend(
+                `task:${task.id}:past-time`,
+                `<b>Tugas belum selesai — waktu habis!</b>\n\n"${title}"\nDeadline: <b>${when}</b>.\n\nSegera selesaikan di ProDo.`
+            );
             return true;
         }
         return false;
@@ -79,11 +117,18 @@ const AppNotifications = {
             const title = this._escapeHtml(task.title);
             const due = this._formatDate(task.dueDate);
 
+            if (task.dueTime) {
+                const past = await this._checkTaskDueDateTime(task, title);
+                if (past) continue;
+            }
+
             if (days < 0) {
-                await this._trySend(
-                    `task:${task.id}:overdue`,
-                    `<b>Tugas terlewat</b>\n\n"${title}"\nJatuh tempo: ${due}\n\nSegera selesaikan di ProDo.`
-                );
+                if (!task.dueTime) {
+                    await this._trySend(
+                        `task:${task.id}:overdue`,
+                        `<b>Tugas terlewat</b>\n\n"${title}"\nJatuh tempo: ${due}\n\nSegera selesaikan di ProDo.`
+                    );
+                }
             } else if (days === 3) {
                 await this._trySend(
                     `task:${task.id}:h-3`,
@@ -95,10 +140,12 @@ const AppNotifications = {
                     `<b>Pengingat tugas (H-1)</b>\n\n"${title}"\nJatuh tempo besok (${due}).`
                 );
             } else if (days === 0) {
-                await this._trySend(
-                    `task:${task.id}:h0`,
-                    `<b>Pengingat tugas (Hari H)</b>\n\n"${title}"\nJatuh tempo hari ini.`
-                );
+                if (!task.dueTime) {
+                    await this._trySend(
+                        `task:${task.id}:h0`,
+                        `<b>Pengingat tugas (Hari H)</b>\n\n"${title}"\nJatuh tempo hari ini.`
+                    );
+                }
             }
         }
     },
