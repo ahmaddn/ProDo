@@ -82,22 +82,22 @@
             </div>
 
             <!-- Page Tabs (only visible when logged in) -->
-            <div id="pageTabs" class="hidden flex items-center bg-slate-100 rounded-xl p-1 gap-1">
-                <button id="tabDashboard" class="tab-btn active-tab px-4 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 transition-all" data-page="dashboard">
-                    <i data-lucide="bar-chart-2" class="w-4 h-4"></i>
-                    <span class="hidden sm:inline">Dashboard</span>
+            <div id="pageTabs" class="hidden flex fixed bottom-0 left-0 w-full bg-surface border-t border-slate-200 md:static md:w-auto md:bg-slate-100 md:border-none md:rounded-xl p-2 md:p-1 gap-1 justify-around md:justify-start z-40 shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.05)] md:shadow-none transition-all pb-safe">
+                <button id="tabDashboard" class="tab-btn active-tab flex-1 md:flex-none flex-col md:flex-row py-2 md:py-1.5 px-2 md:px-4 rounded-lg text-[10px] md:text-sm font-medium flex items-center justify-center gap-1 transition-all" data-page="dashboard">
+                    <i data-lucide="bar-chart-2" class="w-5 h-5 md:w-4 md:h-4 mb-0.5 md:mb-0"></i>
+                    <span>Dashboard</span>
                 </button>
-                <button id="tabTodolist" class="tab-btn px-4 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 transition-all" data-page="todolist">
-                    <i data-lucide="list-checks" class="w-4 h-4"></i>
-                    <span class="hidden sm:inline">Tugas</span>
+                <button id="tabTodolist" class="tab-btn flex-1 md:flex-none flex-col md:flex-row py-2 md:py-1.5 px-2 md:px-4 rounded-lg text-[10px] md:text-sm font-medium flex items-center justify-center gap-1 transition-all" data-page="todolist">
+                    <i data-lucide="list-checks" class="w-5 h-5 md:w-4 md:h-4 mb-0.5 md:mb-0"></i>
+                    <span>Tugas</span>
                 </button>
-                <button id="tabCalendar" class="tab-btn px-4 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 transition-all" data-page="calendar">
-                    <i data-lucide="calendar-days" class="w-4 h-4"></i>
-                    <span class="hidden sm:inline">Kalender</span>
+                <button id="tabCalendar" class="tab-btn flex-1 md:flex-none flex-col md:flex-row py-2 md:py-1.5 px-2 md:px-4 rounded-lg text-[10px] md:text-sm font-medium flex items-center justify-center gap-1 transition-all" data-page="calendar">
+                    <i data-lucide="calendar-days" class="w-5 h-5 md:w-4 md:h-4 mb-0.5 md:mb-0"></i>
+                    <span>Kalender</span>
                 </button>
-                <button id="tabHistory" class="tab-btn px-4 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 transition-all" data-page="history">
-                    <i data-lucide="history" class="w-4 h-4"></i>
-                    <span class="hidden sm:inline">Riwayat</span>
+                <button id="tabHistory" class="tab-btn flex-1 md:flex-none flex-col md:flex-row py-2 md:py-1.5 px-2 md:px-4 rounded-lg text-[10px] md:text-sm font-medium flex items-center justify-center gap-1 transition-all" data-page="history">
+                    <i data-lucide="history" class="w-5 h-5 md:w-4 md:h-4 mb-0.5 md:mb-0"></i>
+                    <span>Riwayat</span>
                 </button>
             </div>
 
@@ -118,7 +118,7 @@
 
     <!-- Auth Container -->
     <div id="authContainer" class="flex-1 flex items-center justify-center p-4">
-        <div class="bg-surface w-full max-w-sm rounded-2xl shadow-xl border border-slate-200 p-8 animate-scale-in">
+        <div class="bg-surface w-full max-w-sm rounded-2xl shadow-xl border border-slate-200 p-6 md:p-8 animate-scale-in">
             <div class="text-center mb-8">
                 <img src="assets/logo.png" alt="ProDo Logo" class="w-16 h-16 mx-auto rounded-2xl shadow-sm mb-4 border border-slate-100">
                 <h2 class="text-2xl font-bold text-slate-800">Selamat Datang</h2>
@@ -145,7 +145,7 @@
     </div>
 
     <!-- App Content -->
-    <div id="appContainer" class="hidden flex-1 flex flex-col">
+    <div id="appContainer" class="hidden flex-1 flex flex-col pb-20 md:pb-0">
 
         <!-- ===================== DASHBOARD PAGE ===================== -->
         <div id="pageDashboard" class="page-section container mx-auto px-4 py-6 flex-1">
@@ -410,11 +410,11 @@
                 </button>
 
                 <!-- Kanban Board -->
-                <div class="overflow-x-auto pb-4">
-                    <div class="kanban-board flex flex-col lg:flex-row gap-4 items-start">
+                <div class="overflow-hidden pb-4">
+                    <div class="kanban-board flex gap-4 items-start overflow-x-auto snap-x snap-mandatory scroll-smooth pb-4 lg:overflow-visible lg:snap-none w-full scrollbar-hide">
                         
                         <!-- Column: To Do -->
-                        <div class="kanban-column flex-1 bg-slate-50/50 rounded-2xl border border-slate-200/60 p-3 flex flex-col min-w-[280px]">
+                        <div class="kanban-column flex-1 bg-slate-50/50 rounded-2xl border border-slate-200/60 p-3 flex flex-col min-w-[280px] w-[85vw] max-w-[340px] lg:w-auto lg:max-w-none snap-center flex-shrink-0 lg:flex-shrink">
                             <div class="flex items-center justify-between mb-3 px-1 flex-shrink-0">
                                 <h3 class="font-semibold text-sm text-slate-700 flex items-center gap-2">
                                     <div class="w-2 h-2 rounded-full bg-primary"></div>
@@ -426,7 +426,7 @@
                         </div>
 
                         <!-- Column: Penting / Hari Ini -->
-                        <div class="kanban-column flex-1 bg-amber-50/30 rounded-2xl border border-amber-200/50 p-3 flex flex-col min-w-[280px]">
+                        <div class="kanban-column flex-1 bg-amber-50/30 rounded-2xl border border-amber-200/50 p-3 flex flex-col min-w-[280px] w-[85vw] max-w-[340px] lg:w-auto lg:max-w-none snap-center flex-shrink-0 lg:flex-shrink">
                             <div class="flex items-center justify-between mb-3 px-1 flex-shrink-0">
                                 <h3 class="font-semibold text-sm text-slate-700 flex items-center gap-2">
                                     <div class="w-2 h-2 rounded-full bg-warning"></div>
@@ -438,7 +438,7 @@
                         </div>
 
                         <!-- Column: Selesai -->
-                        <div class="kanban-column flex-1 bg-emerald-50/30 rounded-2xl border border-emerald-200/50 p-3 flex flex-col min-w-[280px]">
+                        <div class="kanban-column flex-1 bg-emerald-50/30 rounded-2xl border border-emerald-200/50 p-3 flex flex-col min-w-[280px] w-[85vw] max-w-[340px] lg:w-auto lg:max-w-none snap-center flex-shrink-0 lg:flex-shrink">
                             <div class="flex items-center justify-between mb-3 px-1 flex-shrink-0">
                                 <h3 class="font-semibold text-sm text-slate-700 flex items-center gap-2">
                                     <div class="w-2 h-2 rounded-full bg-success"></div>

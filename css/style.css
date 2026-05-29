@@ -425,11 +425,5 @@ select.task-form-input {
    ──────────────────────────────────────────────── */
 
 @media (max-width: 1024px) {
-    .kanban-board {
-        flex-direction: column;
-    }
-
-    .kanban-column {
-        min-height: 350px;
-    }
+    /* Kept intentionally empty to prevent column stacking since we now use snap scrolling horizontally on mobile */
 }
