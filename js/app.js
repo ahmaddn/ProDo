@@ -76,6 +76,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const authForm       = document.getElementById('authForm');
     const authUsername   = document.getElementById('authUsername');
     const authPassword   = document.getElementById('authPassword');
+    const authRemember   = document.getElementById('authRemember');
+    const authRememberWrap = document.getElementById('authRememberWrap');
     const authSubmitBtn  = document.getElementById('authSubmitBtn');
     const authSwitchBtn  = document.getElementById('authSwitchBtn');
     const authSwitchText = document.getElementById('authSwitchText');
@@ -273,12 +275,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             authSwitchText.textContent = 'Sudah punya akun?';
             authSwitchBtn.textContent = 'Masuk sekarang';
             authSubtitle.textContent = 'Buat akun baru untuk memulai.';
+            if (authRememberWrap) authRememberWrap.classList.add('hidden');
         } else {
             authMode = 'login';
             authSubmitBtn.textContent = 'Masuk';
             authSwitchText.textContent = 'Belum punya akun?';
             authSwitchBtn.textContent = 'Daftar sekarang';
             authSubtitle.textContent = 'Masuk untuk mengelola tugas Anda.';
+            if (authRememberWrap) authRememberWrap.classList.remove('hidden');
         }
     });
 
@@ -290,8 +294,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         setAuthLoading(true);
         try {
+            const rememberMe = authRemember ? authRemember.checked : true;
             if (authMode === 'login') {
-                const ok = await Storage.loginUser(email, pass);
+                const ok = await Storage.loginUser(email, pass, rememberMe);
                 if (ok) {
                     authUsername.value = '';
                     authPassword.value = '';
@@ -303,7 +308,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     UI.showToast('Email atau password salah.', 'error');
                 }
             } else {
-                const ok = await Storage.registerUser(email, pass);
+                const ok = await Storage.registerUser(email, pass, rememberMe);
                 if (ok) {
                     authUsername.value = '';
                     authPassword.value = '';

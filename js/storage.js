@@ -257,9 +257,11 @@ const Storage = {
         return map[error?.code] || error?.message || 'Gagal autentikasi.';
     },
 
-    async registerUser(email, password) {
+    async registerUser(email, password, rememberMe = true) {
         if (!this._isConfigured()) throw new Error(this._configErrorMessage());
         try {
+            const persistence = rememberMe ? firebase.auth.Auth.Persistence.LOCAL : firebase.auth.Auth.Persistence.SESSION;
+            await this._auth.setPersistence(persistence);
             await this._auth.createUserWithEmailAndPassword(email, password);
             await this._waitForReady();
             return true;
@@ -269,9 +271,11 @@ const Storage = {
         }
     },
 
-    async loginUser(email, password) {
+    async loginUser(email, password, rememberMe = true) {
         if (!this._isConfigured()) throw new Error(this._configErrorMessage());
         try {
+            const persistence = rememberMe ? firebase.auth.Auth.Persistence.LOCAL : firebase.auth.Auth.Persistence.SESSION;
+            await this._auth.setPersistence(persistence);
             await this._auth.signInWithEmailAndPassword(email, password);
             await this._waitForReady();
             return true;

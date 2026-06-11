@@ -62,7 +62,7 @@
 
     <!-- Nagging Banner -->
     <div id="naggingBanner" class="hidden bg-danger text-white py-3 px-4 shadow-lg sticky top-0 z-40">
-        <div class="container mx-auto flex items-center justify-between">
+        <div class="w-full px-4 lg:px-8 flex items-center justify-between">
             <div class="flex items-center gap-3">
                 <i data-lucide="alert-triangle" class="w-5 h-5 flex-shrink-0"></i>
                 <span class="font-medium text-sm" id="naggingText">Ada tugas yang terlewat! Segera selesaikan.</span>
@@ -75,7 +75,7 @@
 
     <!-- Main Navigation -->
     <nav class="bg-surface shadow-sm border-b border-slate-200 sticky top-0 z-30">
-        <div class="container mx-auto px-4 py-3 flex items-center justify-between">
+        <div class="w-full px-4 lg:px-8 py-3 flex items-center justify-between">
             <div class="flex items-center gap-3">
                 <img src="assets/logo.png" alt="ProDo Logo" class="w-9 h-9 rounded-xl shadow-sm border border-slate-100">
                 <h1 class="text-xl font-bold text-slate-800 tracking-tight">ProDo</h1>
@@ -133,6 +133,10 @@
                     <label class="block text-sm font-medium text-slate-700 mb-1">Password</label>
                     <input type="password" id="authPassword" class="w-full py-2.5 px-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" required placeholder="Masukkan password">
                 </div>
+                <div class="flex items-center gap-2 mt-1" id="authRememberWrap">
+                    <input type="checkbox" id="authRemember" class="rounded border-slate-300 text-primary focus:ring-primary" checked>
+                    <label for="authRemember" class="text-sm text-slate-600 cursor-pointer">Ingat Saya</label>
+                </div>
                 <button type="submit" id="authSubmitBtn" class="w-full py-3 px-4 bg-primary text-white rounded-xl font-medium hover:bg-indigo-600 transition-colors shadow-md shadow-primary/30 mt-2">
                     Masuk
                 </button>
@@ -148,7 +152,7 @@
     <div id="appContainer" class="hidden flex-1 flex flex-col pb-20 md:pb-0">
 
         <!-- ===================== DASHBOARD PAGE ===================== -->
-        <div id="pageDashboard" class="page-section container mx-auto px-4 py-6 flex-1">
+        <div id="pageDashboard" class="page-section w-full px-4 lg:px-8 py-6 flex-1">
 
             <!-- Welcome Banner -->
             <div class="mb-6">
@@ -330,7 +334,7 @@
         </div>
 
         <!-- ===================== TODOLIST PAGE ===================== -->
-        <div id="pageTodolist" class="page-section hidden container mx-auto px-4 py-6 flex-1 flex flex-col md:flex-row gap-6">
+        <div id="pageTodolist" class="page-section hidden w-full px-4 lg:px-8 py-6 flex-1 flex flex-col md:flex-row gap-6">
 
             <!-- Sidebar -->
             <aside class="w-full md:w-72 flex-shrink-0 flex flex-col gap-4">
@@ -455,7 +459,7 @@
         </div>
 
         <!-- ===================== HISTORY PAGE ===================== -->
-        <div id="pageHistory" class="page-section container mx-auto px-4 py-6 flex-1 hidden">
+        <div id="pageHistory" class="page-section w-full px-4 lg:px-8 py-6 flex-1 hidden">
             <div class="mb-6">
                 <h2 class="text-2xl font-bold text-slate-800">Riwayat Tugas</h2>
                 <p class="text-slate-500 text-sm">Kelola semua tugas — belum dimulai, sedang dikerjakan, dan selesai.</p>
@@ -471,13 +475,13 @@
                 <input type="search" id="historySearchInput" placeholder="Cari tugas..." class="flex-1 min-w-[200px] py-2 px-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
             </div>
 
-            <div id="historyTaskList" class="space-y-3">
+            <div id="historyTaskList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 <!-- rendered by history.js -->
             </div>
         </div>
 
         <!-- ===================== CALENDAR PAGE ===================== -->
-        <div id="pageCalendar" class="page-section container mx-auto px-4 py-6 flex-1 hidden flex-col">
+        <div id="pageCalendar" class="page-section w-full px-4 lg:px-8 py-6 flex-1 hidden flex-col">
             <div class="mb-6 flex justify-between items-center flex-wrap gap-4">
                 <div>
                     <h2 class="text-2xl font-bold text-slate-800">Manajemen Kegiatan</h2>

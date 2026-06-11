@@ -37,7 +37,7 @@ const TaskHistory = {
         });
 
         if (filtered.length === 0) {
-            el.innerHTML = '<div class="text-center text-slate-400 py-12 border-2 border-dashed border-slate-200 rounded-2xl">Tidak ada tugas untuk filter ini.</div>';
+            el.innerHTML = '<div class="col-span-full text-center text-slate-400 py-12 border-2 border-dashed border-slate-200 rounded-2xl">Tidak ada tugas untuk filter ini.</div>';
             return;
         }
 
@@ -75,7 +75,7 @@ const TaskHistory = {
             : '';
 
         return `
-            <div class="history-task-card bg-white border border-slate-200 rounded-2xl p-4 shadow-sm hover:shadow-md transition-shadow" data-id="${task.id}">
+            <div class="history-task-card h-full flex flex-col bg-white border border-slate-200 rounded-2xl p-4 shadow-sm hover:shadow-md transition-shadow" data-id="${task.id}">
                 <div class="flex flex-wrap items-start justify-between gap-2 mb-2">
                     <h3 class="font-semibold text-slate-800 ${status === 'completed' ? 'line-through text-slate-500' : ''}">${this.escape(task.title)}</h3>
                     <span class="text-xs font-medium px-2.5 py-1 rounded-full ${meta.class}">${meta.label}</span>
@@ -91,8 +91,8 @@ const TaskHistory = {
                 </div>
                 ${note}
                 ${lastLogHtml}
-                <p class="text-[10px] text-slate-400 mt-2">Diperbarui: ${updated}</p>
-                <div class="flex gap-2 mt-3 pt-3 border-t border-slate-100">
+                <p class="text-[10px] text-slate-400 mt-2 mb-3">Diperbarui: ${updated}</p>
+                <div class="flex gap-2 mt-auto pt-3 border-t border-slate-100">
                     <button type="button" class="history-progress-btn flex-1 py-2 px-3 text-sm font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-xl transition-colors" data-id="${task.id}">
                         Update progress
                     </button>
