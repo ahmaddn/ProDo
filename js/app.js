@@ -440,6 +440,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             await Storage.checkAndUpdateStreak();
             taskProgressModal.classList.add('hidden');
             refreshCurrentPage();
+            
+            // Trigger Confetti
+            if (typeof confetti === 'function') {
+                confetti({
+                    particleCount: 120,
+                    spread: 80,
+                    origin: { y: 0.6 },
+                    colors: ['#6366f1', '#10b981', '#f59e0b', '#ec4899', '#3b82f6']
+                });
+            }
         }, 'Tugas ditandai selesai.');
     });
 
