@@ -52,7 +52,7 @@ const CalendarUI = {
         }
 
         const events = [];
-        
+
         // 1. Tasks (Biru)
         const tasks = Storage.getTasks();
         tasks.forEach(task => {
@@ -134,3 +134,28 @@ const CalendarUI = {
         }
     }
 };
+
+// Add the recovery link without coupling the auth form markup to navigation.
+document.addEventListener('DOMContentLoaded', () => {
+    const passwordInput = document.getElementById('authPassword');
+    const authSubmitBtn = document.getElementById('authSubmitBtn');
+    if (!passwordInput || !authSubmitBtn) return;
+
+    const forgotPasswordLink = document.createElement('a');
+    forgotPasswordLink.href = 'reset-password.html';
+    forgotPasswordLink.id = 'forgotPasswordLink';
+    forgotPasswordLink.className = 'block text-right text-sm text-primary font-medium hover:underline mt-2';
+    forgotPasswordLink.textContent = 'Lupa password?';
+    passwordInput.parentElement.insertAdjacentElement('afterend', forgotPasswordLink);
+
+    // Keep this login-only link hidden while the form is in registration mode.
+    const updateLinkVisibility = () => {
+        forgotPasswordLink.classList.toggle('hidden', authSubmitBtn.textContent.trim() !== 'Masuk');
+    };
+    new MutationObserver(updateLinkVisibility).observe(authSubmitBtn, {
+        childList: true,
+        characterData: true,
+        subtree: true
+    });
+    updateLinkVisibility();
+});
